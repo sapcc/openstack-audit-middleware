@@ -11,10 +11,7 @@ not available at all.
 
 For operators the difference is minor though. The integration of the new middleware in the OpenStack service works the same way with the only change being different mapping files and of course the new binaries.  
 
-.. figure:: ./images/audit.png
-   :width: 100%
-   :align: center
-   :alt: Figure 1: Audit middleware in Nova pipeline
+![Nova pipeline with audit middleware](./doc/source/images/audit.png)
 
 The figure above shows the middleware in Nova's pipeline.
 
