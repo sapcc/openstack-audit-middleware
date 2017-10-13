@@ -20,17 +20,17 @@ except ImportError:
 
 
 class _LogNotifier(object):
-
     def __init__(self, log):
         self._log = log
 
     def notify(self, context, payload):
-        self._log.info('Event type: %(event_type)s, Context: %(context)s, '
-                       'Payload: %(payload)s', {'context': context, 'payload': payload})
+        self._log.info('Event type: audit.cadf, Context: %(context)s, '
+                       'Payload: %(payload)s',
+                       {'context': context, 'event_type': 'audit.cadf',
+                        'payload': payload})
 
 
 class _MessagingNotifier(object):
-
     def __init__(self, notifier):
         self._notifier = notifier
 

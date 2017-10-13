@@ -19,7 +19,7 @@ from auditmiddleware.tests.unit import base
 class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
 
     def setUp(self):
-        p = 'keystonemiddleware.audit._notifier.oslo_messaging'
+        p = 'auditmiddleware._notifier.oslo_messaging'
         f = fixtures.MockPatch(p, None)
         self.messaging_fixture = self.useFixture(f)
 
@@ -28,13 +28,9 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
     def test_api_request_no_messaging(self):
         app = self.create_simple_app()
 
-        with mock.patch('keystonemiddleware.audit._LOG.info') as log:
+        with mock.patch('auditmiddleware._LOG.info') as log:
             app.get('/foo/bar', extra_environ=self.get_environ_header())
 
-            # Check first notification with only 'request'
+            # Check notification'
             call_args = log.call_args_list[0][0]
-            self.assertEqual('audit.http.request', call_args[1]['event_type'])
-
-            # Check second notification with request + response
-            call_args = log.call_args_list[1][0]
-            self.assertEqual('audit.http.response', call_args[1]['event_type'])
+            self.assertEqual('audit.cadf', call_args[1]['event_type'])

@@ -21,7 +21,6 @@ from auditmiddleware.tests.unit import base
 
 
 class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
-
     def setUp(self):
         self.notifier = mock.MagicMock()
 
@@ -35,21 +34,12 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         self.create_simple_app().get('/foo/bar',
                                      extra_environ=self.get_environ_header())
 
-        # Check first notification with only 'request'
+        # Check notification with request + response
         call_args = self.notifier.notify.call_args_list[0][0]
-        self.assertEqual('audit.http.request', call_args[1])
-        self.assertEqual('/foo/bar', call_args[2]['requestPath'])
-        self.assertEqual('pending', call_args[2]['outcome'])
-        self.assertNotIn('reason', call_args[2])
-        self.assertNotIn('reporterchain', call_args[2])
-
-        # Check second notification with request + response
-        call_args = self.notifier.notify.call_args_list[1][0]
-        self.assertEqual('audit.http.response', call_args[1])
-        self.assertEqual('/foo/bar', call_args[2]['requestPath'])
-        self.assertEqual('success', call_args[2]['outcome'])
-        self.assertIn('reason', call_args[2])
-        self.assertIn('reporterchain', call_args[2])
+        self.assertEqual('/foo/bar', call_args[1]['requestPath'])
+        self.assertEqual('success', call_args[1]['outcome'])
+        self.assertIn('reason', call_args[1])
+        self.assertIn('reporterchain', call_args[1])
 
     def test_api_request_failure(self):
 
@@ -67,35 +57,19 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         except CustomException:
             pass
 
-        # Check first notification with only 'request'
+        # Check notification with request + response
         call_args = self.notifier.notify.call_args_list[0][0]
-        self.assertEqual('audit.http.request', call_args[1])
-        self.assertEqual('/foo/bar', call_args[2]['requestPath'])
-        self.assertEqual('pending', call_args[2]['outcome'])
-        self.assertNotIn('reporterchain', call_args[2])
-
-        # Check second notification with request + response
-        call_args = self.notifier.notify.call_args_list[1][0]
-        self.assertEqual('audit.http.response', call_args[1])
-        self.assertEqual('/foo/bar', call_args[2]['requestPath'])
-        self.assertEqual('unknown', call_args[2]['outcome'])
-        self.assertIn('reporterchain', call_args[2])
+        self.assertEqual('/foo/bar', call_args[1]['requestPath'])
+        self.assertEqual('unknown', call_args[1]['outcome'])
+        self.assertIn('reporterchain', call_args[1])
 
     def test_process_request_fail(self):
         req = webob.Request.blank('/foo/bar',
                                   environ=self.get_environ_header('GET'))
         req.context = {}
 
-        self.create_simple_middleware()._process_request(req)
-        self.assertTrue(self.notifier.notify.called)
-
-    def test_process_response_fail(self):
-        req = webob.Request.blank('/foo/bar',
-                                  environ=self.get_environ_header('GET'))
-        req.context = {}
-
         middleware = self.create_simple_middleware()
-        middleware._process_response(req, webob.response.Response())
+        middleware._process_request(req, webob.response.Response())
         self.assertTrue(self.notifier.notify.called)
 
     def test_ignore_req_opt(self):
@@ -110,37 +84,26 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         # Check non-GET/PUT request does send notification
         app.post('/accept/foo', extra_environ=self.get_environ_header())
 
-        self.assertEqual(2, self.notifier.notify.call_count)
+        self.assertEqual(1, self.notifier.notify.call_count)
 
         call_args = self.notifier.notify.call_args_list[0][0]
-        self.assertEqual('audit.http.request', call_args[1])
-        self.assertEqual('/accept/foo', call_args[2]['requestPath'])
-
-        call_args = self.notifier.notify.call_args_list[1][0]
-        self.assertEqual('audit.http.response', call_args[1])
-        self.assertEqual('/accept/foo', call_args[2]['requestPath'])
+        self.assertEqual('/accept/foo', call_args[1]['requestPath'])
 
     def test_cadf_event_context_scoped(self):
         self.create_simple_app().get('/foo/bar',
                                      extra_environ=self.get_environ_header())
 
-        self.assertEqual(2, self.notifier.notify.call_count)
-        first, second = [a[0] for a in self.notifier.notify.call_args_list]
+        self.assertEqual(1, self.notifier.notify.call_count)
+
+        call_args = self.notifier.notify.call_args_list[0][0]
 
         # the Context is the first argument. Let's verify it.
-        self.assertIsInstance(first[0], dict)
-
-        # ensure exact same context is used between request and response
-        self.assertIs(first[0], second[0])
+        self.assertIsInstance(call_args[0], dict)
 
     def test_cadf_event_scoped_to_request(self):
         app = self.create_simple_app()
         resp = app.get('/foo/bar', extra_environ=self.get_environ_header())
         self.assertIsNotNone(resp.request.environ.get('cadf_event'))
-
-        # ensure exact same event is used between request and response
-        self.assertEqual(self.notifier.calls[0].payload['id'],
-                         self.notifier.calls[1].payload['id'])
 
     def test_cadf_event_scoped_to_request_on_error(self):
         middleware = self.create_simple_middleware()
@@ -158,11 +121,11 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         req2.context = {}
         self.notifier.reset_mock()
 
-        middleware._process_response(req2, webob.response.Response())
+        middleware._process_request(req2, webob.response.Response())
         self.assertTrue(self.notifier.notify.called)
         # ensure event is not the same across requests
         self.assertNotEqual(req.environ['cadf_event'].id,
-                            self.notifier.notify.call_args_list[0][0][2]['id'])
+                            self.notifier.notify.call_args_list[0][0][1]['id'])
 
     def test_project_name_from_oslo_config(self):
         self.assertEqual(self.PROJECT_NAME,
@@ -182,26 +145,22 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         req.context = {}
         middleware._process_request(req)
         payload = req.environ['cadf_event'].as_dict()
-        middleware._process_response(req, None)
-        payload2 = req.environ['cadf_event'].as_dict()
-        self.assertEqual(payload['id'], payload2['id'])
-        self.assertEqual(payload['tags'], payload2['tags'])
-        self.assertEqual(payload2['outcome'], 'unknown')
-        self.assertNotIn('reason', payload2)
-        self.assertEqual(len(payload2['reporterchain']), 1)
-        self.assertEqual(payload2['reporterchain'][0]['role'], 'modifier')
-        self.assertEqual(payload2['reporterchain'][0]['reporter']['id'],
+        self.assertEqual(payload['outcome'], 'unknown')
+        self.assertNotIn('reason', payload)
+        self.assertEqual(len(payload['reporterchain']), 1)
+        self.assertEqual(payload['reporterchain'][0]['role'], 'modifier')
+        self.assertEqual(payload['reporterchain'][0]['reporter']['id'],
                          'target')
 
     def test_missing_req(self):
-        req = webob.Request.blank('http://admin_host:8774/v2/'
-                                  + str(uuid.uuid4()) + '/servers',
+        req = webob.Request.blank('http://admin_host:8774/v2/' +
+                                  str(uuid.uuid4()) + '/servers',
                                   environ=self.get_environ_header('GET'))
         req.context = {}
         self.assertNotIn('cadf_event', req.environ)
 
-        self.create_simple_middleware()._process_response(req,
-                                                          webob.Response())
+        self.create_simple_middleware()._process_request(req,
+                                                         webob.Response())
         self.assertIn('cadf_event', req.environ)
         payload = req.environ['cadf_event'].as_dict()
         self.assertEqual(payload['outcome'], 'success')

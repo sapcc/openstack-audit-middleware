@@ -1,7 +1,7 @@
 # openstack-audit-middleware
 Paste middleware to produce an CADF audit trail from OpenStack API calls.
 
-It is a replacement for the original _audit_ module within the [keystonemiddleware](https://github.com/openstack/keystonemiddleware) that has been invented to produce a more
+It is a major redesign of the original _audit_ module within the [keystonemiddleware](https://github.com/openstack/keystonemiddleware). It has been invented to produce a more
 verbose audit trail that can be consumed by auditors, end users and complex event processing infrastructures alike.
 
 For that reason it does _not_ adhere to the existing OpenStack taxonomy for CADF. The biggest difference is that it populates
@@ -43,17 +43,19 @@ keystone_nolimit = faultwrap sizelimit authtoken keystonecontext audit osapi_com
 Configure audit middleware
 ==========================
 To properly audit api requests, the audit middleware requires a mapping
-file. The mapping files describes how to generate CADF events out of REST API calls. The services's corresponding
-\<service\>_api_audit_map.yaml file is included in the `etc` folder of this repo.
-
+file. The mapping files describes how to generate CADF events out of REST API calls.
+ 
 The location of the mapping file should be specified explicitly by adding the
-path to the 'audit_map_file' option of the filter definition::
+path to the `audit_map_file` option of the filter definition::
 
 ```
 [filter:audit]
 paste.filter_factory = keystonemiddleware.audit:filter_factory
 audit_map_file = /etc/nova/api_audit_map.yaml
 ```
+
+For each supported OpenStack services, a mapping file named
+_\<service\>\_api\_audit\_map.yaml_ is included in the _etc_ folder of this repo.
 
 Additional options can be set::
 

@@ -13,6 +13,7 @@
 import collections
 import re
 
+import six
 from oslo_log import log as logging
 from oslo_serialization import jsonutils
 from pycadf import cadftaxonomy as taxonomy
@@ -24,7 +25,6 @@ from pycadf import host
 from pycadf import identifier
 from pycadf import resource
 from pycadf import tag
-import six
 from six.moves import configparser
 from six.moves.urllib import parse as urlparse
 
@@ -37,11 +37,9 @@ if six.PY2:
 else:
     _ConfigParser = configparser.ConfigParser
 
-
 Service = collections.namedtuple('Service',
                                  ['id', 'name', 'type', 'admin_endp',
                                   'public_endp', 'private_endp'])
-
 
 AuditMap = collections.namedtuple('AuditMap',
                                   ['path_kw',
@@ -71,7 +69,6 @@ class KeystoneCredential(credential.Credential):
 
 
 class OpenStackAuditMiddleware(object):
-
     def __init__(self, cfg_file, log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
         path_kw = {}
@@ -267,8 +264,8 @@ class OpenStackAuditMiddleware(object):
             public_urlparse = urlparse.urlparse(
                 endpoint_urls.get('publicURL', ''))
             req_url = urlparse.urlparse(req.host_url)
-            if (req_url.netloc == admin_urlparse.netloc
-                    or req_url.netloc == public_urlparse.netloc):
+            if req_url.netloc == admin_urlparse.netloc or \
+               req_url.netloc == public_urlparse.netloc:
                 service_info = self._get_service_info(endp)
                 break
             elif (self._MAP.default_target_endpoint_type and

@@ -32,7 +32,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                   environ=environ,
                                   remote_addr='192.168.0.1')
 
-        middleware = auditmiddleware.OpenStackAuditMiddleware(audit_map)
+        middleware = auditmiddleware._api.OpenStackAuditMiddleware(audit_map)
         return middleware._create_event(req).as_dict()
 
     def test_get_list(self):
@@ -203,18 +203,14 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                   remote_addr='192.168.0.1')
         req.context = {}
         middleware = self.create_simple_middleware()
-        middleware._process_request(req)
+        middleware._process_request(req, webob.Response())
         payload = req.environ['cadf_event'].as_dict()
-        middleware._process_response(req, webob.Response())
-        payload2 = req.environ['cadf_event'].as_dict()
-        self.assertEqual(payload['id'], payload2['id'])
-        self.assertEqual(payload['tags'], payload2['tags'])
-        self.assertEqual(payload2['outcome'], 'success')
-        self.assertEqual(payload2['reason']['reasonType'], 'HTTP')
-        self.assertEqual(payload2['reason']['reasonCode'], '200')
-        self.assertEqual(len(payload2['reporterchain']), 1)
-        self.assertEqual(payload2['reporterchain'][0]['role'], 'modifier')
-        self.assertEqual(payload2['reporterchain'][0]['reporter']['id'],
+        self.assertEqual(payload['outcome'], 'success')
+        self.assertEqual(payload['reason']['reasonType'], 'HTTP')
+        self.assertEqual(payload['reason']['reasonCode'], '200')
+        self.assertEqual(len(payload['reporterchain']), 1)
+        self.assertEqual(payload['reporterchain'][0]['role'], 'modifier')
+        self.assertEqual(payload['reporterchain'][0]['reporter']['id'],
                          'target')
 
     def test_missing_catalog_endpoint_id(self):

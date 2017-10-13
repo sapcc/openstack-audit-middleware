@@ -21,6 +21,10 @@ provides.
 
 import copy
 import functools
+import webob.dec
+
+from auditmiddleware import _api, _notifier
+from keystonemiddleware._common import config
 
 from oslo_config import cfg
 from oslo_context import context as oslo_context
@@ -31,12 +35,6 @@ from pycadf import reason
 from pycadf import reporterstep
 from pycadf import resource
 from pycadf import timestamp
-import webob.dec
-
-from keystonemiddleware._common import config
-from keystonemiddleware.audit import _api
-from keystonemiddleware.audit import _notifier
-
 
 _LOG = None
 AUDIT_MIDDLEWARE_GROUP = 'audit_middleware_notifications'
@@ -69,6 +67,7 @@ def _log_and_ignore_error(fn):
         except Exception as e:
             _LOG.exception('An exception occurred processing '
                            'the API call: %s ', e)
+
     return wrapper
 
 
@@ -83,7 +82,7 @@ class AuditMiddleware(object):
 
     def __init__(self, app, **conf):
         self._application = app
-        self._conf = config.Config('audit',
+        self._conf = config.Config('cadfaudit',
                                    AUDIT_MIDDLEWARE_GROUP,
                                    _list_opts(),
                                    conf)
@@ -92,8 +91,9 @@ class AuditMiddleware(object):
         self._service_name = conf.get('service_name')
         self._ignore_req_list = [x.upper().strip() for x in
                                  conf.get('ignore_req_list', '').split(',')]
-        self._cadf_audit = _api.OpenStackAuditMiddleware(conf.get('audit_map_file'),
-                                                  _LOG)
+        self._cadf_audit = _api.OpenStackAuditMiddleware(
+            conf.get('audit_map_file'),
+            _LOG)
         self._notifier = _notifier.create_notifier(self._conf, _LOG)
 
     def _create_event(self, req):
@@ -168,4 +168,5 @@ def filter_factory(global_conf, **local_conf):
 
     def audit_filter(app):
         return AuditMiddleware(app, **conf)
+
     return audit_filter
