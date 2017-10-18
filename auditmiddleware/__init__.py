@@ -29,12 +29,6 @@ from keystonemiddleware._common import config
 from oslo_config import cfg
 from oslo_context import context as oslo_context
 from oslo_log import log as logging
-from pycadf import cadftaxonomy as taxonomy
-from pycadf import cadftype
-from pycadf import reason
-from pycadf import reporterstep
-from pycadf import resource
-from pycadf import timestamp
 
 _LOG = None
 AUDIT_MIDDLEWARE_GROUP = 'audit_middleware_notifications'
@@ -96,34 +90,12 @@ class AuditMiddleware(object):
             _LOG)
         self._notifier = _notifier.create_notifier(self._conf, _LOG)
 
-    def _create_event(self, req):
-        event = self._cadf_audit._create_event(req)
-        # cache model in request to allow tracking of transistive steps.
-        req.environ['cadf_event'] = event
-        return event
-
     @_log_and_ignore_error
     def _process_request(self, request, response=None):
-        event = self._create_event(request)
+        event = self._cadf_audit.create_event(request, response)
 
-        if response:
-            if response.status_int >= 200 and response.status_int < 400:
-                result = taxonomy.OUTCOME_SUCCESS
-            else:
-                result = taxonomy.OUTCOME_FAILURE
-            event.reason = reason.Reason(
-                reasonType='HTTP', reasonCode=str(response.status_int))
-        else:
-            result = taxonomy.UNKNOWN
-
-        event.outcome = result
-        event.add_reporterstep(
-            reporterstep.Reporterstep(
-                role=cadftype.REPORTER_ROLE_MODIFIER,
-                reporter=resource.Resource(id='target'),
-                reporterTime=timestamp.get_utc_now()))
-
-        self._notifier.notify(request.context, event.as_dict())
+        if event:
+            self._notifier.notify(request.context, event.as_dict())
 
     @webob.dec.wsgify
     def __call__(self, req):

@@ -138,7 +138,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
 
     def test_no_response(self):
         middleware = self.create_simple_middleware()
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         req = webob.Request.blank(url,
                                   environ=self.get_environ_header('GET'),
                                   remote_addr='192.168.0.1')

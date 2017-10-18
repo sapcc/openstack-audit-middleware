@@ -33,10 +33,10 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                   remote_addr='192.168.0.1')
 
         middleware = auditmiddleware._api.OpenStackAuditMiddleware(audit_map)
-        return middleware._create_event(req).as_dict()
+        return middleware.create_event(req).as_dict()
 
     def test_get_list(self):
-        path = '/v2/' + str(uuid.uuid4()) + '/servers'
+        path = '/v2/' + self.project_id + '/servers'
         url = 'http://admin_host:8774' + path
         payload = self.get_payload('GET', url)
 
@@ -71,7 +71,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(path, payload['requestPath'])
 
     def test_get_read(self):
-        url = 'http://admin_host:8774/v2/%s/servers/%s' % (uuid.uuid4().hex,
+        url = 'http://admin_host:8774/v2/%s/servers/%s' % (self.project_id,
                                                            uuid.uuid4().hex)
         payload = self.get_payload('GET', url)
 
@@ -81,7 +81,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_get_unknown_endpoint(self):
-        url = 'http://unknown:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://unknown:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('GET', url)
 
         self.assertEqual(payload['action'], 'read/list')
@@ -99,7 +99,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             f.write("[service_endpoints]\n")
             f.write("compute = service/compute")
 
-        url = 'http://unknown:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://unknown:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('GET', url)
 
         self.assertEqual(payload['action'], 'read/list')
@@ -110,7 +110,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          'service/compute/servers')
 
     def test_put(self):
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('PUT', url)
 
         self.assertEqual(payload['target']['typeURI'],
@@ -119,7 +119,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_delete(self):
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('DELETE', url)
 
         self.assertEqual(payload['target']['typeURI'],
@@ -128,7 +128,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_head(self):
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('HEAD', url)
 
         self.assertEqual(payload['target']['typeURI'],
@@ -137,7 +137,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_post_update(self):
-        url = 'http://admin_host:8774/v2/%s/servers/%s' % (uuid.uuid4().hex,
+        url = 'http://admin_host:8774/v2/%s/servers/%s' % (self.project_id,
                                                            uuid.uuid4().hex)
         payload = self.get_payload('POST', url)
 
@@ -147,7 +147,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_post_create(self):
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('POST', url)
 
         self.assertEqual(payload['target']['typeURI'],
@@ -156,7 +156,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_post_action(self):
-        url = 'http://admin_host:8774/v2/%s/servers/action' % uuid.uuid4().hex
+        url = 'http://admin_host:8774/v2/%s/servers/action' % self.project_id
         body = b'{"createImage" : {"name" : "new-image","metadata": ' \
                b'{"ImageType": "Gold","ImageVersion": "2.0"}}}'
         payload = self.get_payload('POST', url, body=body)
@@ -166,7 +166,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_post_empty_body_action(self):
-        url = 'http://admin_host:8774/v2/%s/servers/action' % uuid.uuid4().hex
+        url = 'http://admin_host:8774/v2/%s/servers/action' % self.project_id
         payload = self.get_payload('POST', url)
 
         self.assertEqual(payload['target']['typeURI'],
@@ -175,17 +175,19 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['outcome'], 'pending')
 
     def test_custom_action(self):
+        host_id = uuid.uuid4().hex
         url = 'http://admin_host:8774/v2/%s/os-hosts/%s/reboot' % (
-            uuid.uuid4().hex, uuid.uuid4().hex)
+            self.project_id, host_id)
         payload = self.get_payload('GET', url)
 
         self.assertEqual(payload['target']['typeURI'],
-                         'service/compute/os-hosts/host/reboot')
+                         'service/compute/os-host')
+        self.assertEqual(payload['target']['id'], host_id)
         self.assertEqual(payload['action'], 'start/reboot')
-        self.assertEqual(payload['outcome'], 'pending')
+        self.assertEqual(payload['outcome'], 'unknown')
 
     def test_custom_action_complex(self):
-        url = 'http://admin_host:8774/v2/%s/os-migrations' % uuid.uuid4().hex
+        url = 'http://admin_host:8774/v2/%s/os-migrations' % self.project_id
         payload = self.get_payload('GET', url)
 
         self.assertEqual(payload['target']['typeURI'],
@@ -197,7 +199,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['action'], 'create')
 
     def test_response_mod_msg(self):
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         req = webob.Request.blank(url,
                                   environ=self.get_environ_header('GET'),
                                   remote_addr='192.168.0.1')
@@ -232,7 +234,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('GET', url, environ=env_headers)
         self.assertEqual(payload['target']['id'], 'nova')
 
@@ -253,7 +255,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('GET', url, environ=env_headers)
         self.assertEqual((payload['target']['addresses'][1]['url']), "unknown")
 
@@ -274,7 +276,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
-        url = 'http://admin_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('GET', url, environ=env_headers)
         self.assertEqual((payload['target']['addresses'][2]['url']), "unknown")
 
@@ -295,7 +297,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
-        url = 'http://public_host:8774/v2/' + str(uuid.uuid4()) + '/servers'
+        url = 'http://public_host:8774/v2/' + self.project_id + '/servers'
         payload = self.get_payload('GET', url, environ=env_headers)
         self.assertEqual((payload['target']['addresses'][0]['url']), "unknown")
 
