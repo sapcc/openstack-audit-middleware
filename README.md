@@ -102,25 +102,26 @@ for the CADF *action* attribute.
 
 Example (Nova)::
 ```
-  # default target endpoint type
-  # should match the endpoint type defined in service catalog
-  target_endpoint_type: public # retrieve service ID from this endpoint
-
   # service type as configured in the OpenStack catalog
-  service_type: 'compute'
+  service_type: compute
+  # configure prefix 
+  prefix: '/v2/{project_id}'
    
   # describe resources exposed by the REST API
   # URL paths follow one of the following patterns:
-  # - /<resource>s: HTTP POST for create, GET for list
-  # - /<resource>s/<resource-id>: HTTP GET for read, PUT for update, DELETE for remove
-  # - /<resource>s/<resource-id>/<custom-action>: specified per resource
-  # - /<resource>s/<resource-id>/<child-resource>: like parent
-  # - /<resource>s/<resource-id>/<child-resource>/<child-resource-id>: like parent
-  # - /<resource>s/<resource-id>/<child-resource-singleton>: singleton resource (e.g. attribute), no own ID
+  # - /<resources>: HTTP POST for create, GET for list
+  # - /<resources>/<resource-id>: HTTP GET for read, PUT for update, DELETE for remove
+  # - /<resources>/<resource-id>/<custom-action>: specified per resource
+  # - /<resources>/<resource-id>/<child-resource>: like parent
+  # - /<resources>/<resource-id>/<child-resource>/<child-resource-id>: like parent
+  # - /<resources>/<resource-id>/<child-resource-singleton>: singleton resource (e.g. attribute), no own ID
   resources:
-      server: # resource name, placed first in the URL path (with an added "s"), followed by the ID
-          # type_uri of the resource, defaults to <service-key>/<resource name>
-          type_uri: compute/server
+      servers: # resource name, placed first in the URL path (with an added "s"), followed by the ID
+          # type URI of the resource, defaults to <service-key>/<resources>
+          # the target id of the resource (list) type is refering to the service
+          type_uri: compute/servers
+          # the target id of the resource element type is refering to the element
+          el_type_uri: compute/servers/server
           # URL-endcoded actions, last part of the URL path, following the ID of the target (child-)resource
           # or "action" in which case the actual action is the first and only element of the JSON payload
           custom_actions:
@@ -128,9 +129,11 @@ Example (Nova)::
               startup: start/startup
           # child resources, placed after the parent resource ID in the URL path
           children:
-             migration:
-                  # type_uri of the resource, defaults to <parent-type_uri>/<resource name>
-                  type_uri: compute/server/migration
+             migrations:
+                  # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
+                  # type_uri: compute/servers/migrations
+                  # element type URI of the resource, defaults to <parent-type_uri>/<resource> (singular form)
+                  el_type_uri: compute/servers/migrations/migration
              os-server-password:
                   # this is an attribute, so there is only a single resource per parent
                   # that means no pluralization of the resource name in the URL and no ID
