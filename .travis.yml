@@ -9,4 +9,5 @@ install:
   - pip install -q .
 before_script:
 #  - flake8 auditmiddleware setup.py
-script: tox -e py27 pep8
+script: tox -e py27
+# ... pep8
