@@ -8,5 +8,5 @@ install:
   - pip install tox flake8 nose mock
   - pip install -q .
 before_script:
-  - flake8 auditmiddleware setup.py
+#  - flake8 auditmiddleware setup.py
 script: tox -e py27 pep8
