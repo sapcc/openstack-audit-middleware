@@ -24,18 +24,20 @@ audit_map_content = """
 service_type: 'compute'
 
 resources:
-    compute:        
-    os-hosts:
+    servers:
       custom_actions:
-        reboot: 'start/reboot'
+        '*': 
 """
 
+user_counter = 0
 
 class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
     PROJECT_NAME = 'auditmiddleware'
 
     def setUp(self):
         super(BaseAuditMiddlewareTest, self).setUp()
+
+        global user_counter
 
         self.audit_map_file_fixture = self.useFixture(
             createfile.CreateFileWithContent('audit', audit_map_content, ext=".yaml"))
@@ -46,6 +48,9 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.cfg.conf([], project=self.PROJECT_NAME)
 
         self.project_id = str(uuid.uuid4().hex)
+        self.user_id = str(uuid.uuid4().hex)
+        self.username = "test user " + str(user_counter)
+        user_counter += 1
 
     def create_middleware(self, cb, **kwargs):
 
@@ -75,10 +80,10 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                                            "id": "resource_id"}],
                             "type": "compute",
                             "name": "nova"}]'''.replace("{0}", self.project_id),
-                       'HTTP_X_USER_ID': 'user_id',
-                       'HTTP_X_USER_NAME': 'user_name',
+                       'HTTP_X_USER_ID': self.user_id,
+                       'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
-                       'HTTP_X_PROJECT_ID': 'tenant_id',
+                       'HTTP_X_PROJECT_ID': self.project_id,
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed'}
         if req_type:
             env_headers['REQUEST_METHOD'] = req_type

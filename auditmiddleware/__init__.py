@@ -64,6 +64,8 @@ def _log_and_ignore_error(fn):
 
     return wrapper
 
+class ConfigError(BaseException):
+    pass
 
 class AuditMiddleware(object):
     """Create an audit event based on request/response.

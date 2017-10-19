@@ -12,73 +12,109 @@
 
 import uuid
 
-import auditmiddleware
-from pycadf import cadftaxonomy as taxonomy
 import webob
+from pycadf import cadftaxonomy as taxonomy
 
+import auditmiddleware
 from auditmiddleware.tests.unit import base
 
 
 class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
-
     def get_payload(self, method, url,
                     audit_map=None, body=None, environ=None):
-        audit_map = audit_map or self.audit_map
-        environ = environ or self.get_environ_header()
+        req, _ = self.build_api_call(method, url, body, environ)
 
+        return self.build_event(req, audit_map)
+
+    def build_event(self, req, resp=None, middleware_cfg=None):
+        cfg = middleware_cfg or self.audit_map
+        middleware = auditmiddleware._api.OpenStackAuditMiddleware(cfg)
+        return middleware.create_event(req, resp).as_dict()
+
+    def build_api_call(self, method, url, req_body=None,
+                       resp_json=None, resp_code=0,
+                       environ=None):
+        environ = environ or self.get_environ_header()
         req = webob.Request.blank(url,
-                                  body=body,
+                                  body=req_body,
                                   method=method,
                                   environ=environ,
                                   remote_addr='192.168.0.1')
+        resp = webob.Response()
+        if resp_json:
+            resp.json = resp_json
 
-        middleware = auditmiddleware._api.OpenStackAuditMiddleware(audit_map)
-        return middleware.create_event(req).as_dict()
+        if resp_code == 0:
+            resp.status_code = \
+            {'GET': 200, 'HEAD': 200, 'POST': 201, 'PUT': 200, 'DELETE': 204}[
+                method]
+            if method == 'POST' and not resp_json:
+                resp.status_code = 204
+        else:
+            resp.status_code = resp_code
+
+        return req, resp
+
+    def check_event(self, request, response, event, action,
+                    target_type_uri,
+                    target_id=None,
+                    target_name=None,
+                    outcome="success"):
+        self.assertEqual(event['action'], action)
+        self.assertEqual(event['typeURI'],
+                         'http://schemas.dmtf.org/cloud/audit/1.0/event')
+        self.assertEqual(event['outcome'], outcome)
+        self.assertEqual(event['eventType'], 'activity')
+        self.assertEqual(event['target'].get('name'), target_name)
+        self.assertEqual(event['target'].get('id'), target_id or self.project_id)
+        self.assertEqual(event['target']['typeURI'], target_type_uri)
+        self.assertEqual(event['initiator']['id'], self.user_id)
+        self.assertEqual(event['initiator'].get('name'), self.username)
+        self.assertEqual(event['initiator']['project_id'], self.project_id)
+        self.assertEqual(event['initiator']['host']['address'],
+                         '192.168.0.1')
+        self.assertEqual(event['initiator']['typeURI'],
+                         'service/security/account/user')
+        # TODO: review current behaviour (why have an obfuscated token
+        # instead of a prefix)
+        self.assertNotEqual(event['initiator']['credential']['token'], 'token')
+        self.assertEqual(event['initiator']['credential']['identity_status'],
+                         'Confirmed')
+        # these fields are only available for finished requests
+        if outcome == 'pending':
+            self.assertNotIn('reason', event)
+            self.assertNotIn('reporterchain', event)
+        else:
+            self.assertEqual(event['reason']['reasonType'], 'HTTP')
+            self.assertEqual(event['reason']['reasonCode'], str(response.status_code))
+
+        # TODO check observer
+        self.assertEqual(event['requestPath'], request.path)
+
+    def build_url(self, res, host_url=None, prefix='', action=None, res_id=None, child_res=None, child_res_id=None):
+        url = host_url if host_url else 'http://admin_host:8774' + prefix
+        url += '/' + res
+        url += '/' + res_id if res_id else ''
+        url += '/' + child_res if child_res else ''
+        url += '/' + child_res_id if child_res_id else ''
+        url += '/' + action if action else ''
+
+        return url
 
     def test_get_list(self):
-        path = '/v2/' + self.project_id + '/servers'
-        url = 'http://admin_host:8774' + path
-        payload = self.get_payload('GET', url)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
 
-        self.assertEqual(payload['action'], 'read/list')
-        self.assertEqual(payload['typeURI'],
-                         'http://schemas.dmtf.org/cloud/audit/1.0/event')
-        self.assertEqual(payload['outcome'], 'pending')
-        self.assertEqual(payload['eventType'], 'activity')
-        self.assertEqual(payload['target']['name'], 'nova')
-        self.assertEqual(payload['target']['id'], 'resource_id')
-        self.assertEqual(payload['target']['typeURI'],
-                         'service/compute/servers')
-        self.assertEqual(len(payload['target']['addresses']), 3)
-        self.assertEqual(payload['target']['addresses'][0]['name'], 'admin')
-        self.assertEqual(payload['target']['addresses'][0]['url'],
-                         'http://admin_host:8774')
-        self.assertEqual(payload['initiator']['id'], 'user_id')
-        self.assertEqual(payload['initiator']['name'], 'user_name')
-        self.assertEqual(payload['initiator']['project_id'],
-                         'tenant_id')
-        self.assertEqual(payload['initiator']['host']['address'],
-                         '192.168.0.1')
-        self.assertEqual(payload['initiator']['typeURI'],
-                         'service/security/account/user')
-        self.assertNotEqual(payload['initiator']['credential']['token'],
-                            'token')
-        self.assertEqual(payload['initiator']['credential']['identity_status'],
-                         'Confirmed')
-        self.assertNotIn('reason', payload)
-        self.assertNotIn('reporterchain', payload)
-        self.assertEqual(payload['observer']['id'], 'target')
-        self.assertEqual(path, payload['requestPath'])
+        self.check_event(request, response, event, taxonomy.ACTION_LIST, "compute/servers")
 
     def test_get_read(self):
-        url = 'http://admin_host:8774/v2/%s/servers/%s' % (self.project_id,
-                                                           uuid.uuid4().hex)
-        payload = self.get_payload('GET', url)
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id, res_id=rid)
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
 
-        self.assertEqual(payload['target']['typeURI'],
-                         'service/compute/servers/server')
-        self.assertEqual(payload['action'], 'read')
-        self.assertEqual(payload['outcome'], 'pending')
+        self.check_event(request, response, event, taxonomy.ACTION_READ, "compute/servers/server", rid)
 
     def test_get_unknown_endpoint(self):
         url = 'http://unknown:8774/v2/' + self.project_id + '/servers'
@@ -217,20 +253,20 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_missing_catalog_endpoint_id(self):
         env_headers = {'HTTP_X_SERVICE_CATALOG':
-                       '''[{"endpoints_links": [],
-                            "endpoints": [{"adminURL":
-                                           "http://admin_host:8774",
-                                           "region": "RegionOne",
-                                           "publicURL":
-                                           "http://public_host:8774",
-                                           "internalURL":
-                                           "http://internal_host:8774"}],
-                            "type": "compute",
-                            "name": "nova"}]''',
-                       'HTTP_X_USER_ID': 'user_id',
-                       'HTTP_X_USER_NAME': 'user_name',
+                           '''[{"endpoints_links": [],
+                                "endpoints": [{"adminURL":
+                                               "http://admin_host:8774",
+                                               "region": "RegionOne",
+                                               "publicURL":
+                                               "http://public_host:8774",
+                                               "internalURL":
+                                               "http://internal_host:8774"}],
+                                "type": "compute",
+                                "name": "nova"}]''',
+                       'HTTP_X_USER_ID': self.user_id,
+                       'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
-                       'HTTP_X_PROJECT_ID': 'tenant_id',
+                       'HTTP_X_PROJECT_ID': self.project_id,
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
@@ -240,18 +276,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_endpoint_missing_internal_url(self):
         env_headers = {'HTTP_X_SERVICE_CATALOG':
-                       '''[{"endpoints_links": [],
-                            "endpoints": [{"adminURL":
-                                           "http://admin_host:8774",
-                                           "region": "RegionOne",
-                                           "publicURL":
-                                           "http://public_host:8774"}],
-                             "type": "compute",
-                             "name": "nova"}]''',
-                       'HTTP_X_USER_ID': 'user_id',
-                       'HTTP_X_USER_NAME': 'user_name',
+                           '''[{"endpoints_links": [],
+                                "endpoints": [{"adminURL":
+                                               "http://admin_host:8774",
+                                               "region": "RegionOne",
+                                               "publicURL":
+                                               "http://public_host:8774"}],
+                                 "type": "compute",
+                                 "name": "nova"}]''',
+                       'HTTP_X_USER_ID': self.user_id,
+                       'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
-                       'HTTP_X_PROJECT_ID': 'tenant_id',
+                       'HTTP_X_PROJECT_ID': self.project_id,
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
@@ -261,18 +297,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_endpoint_missing_public_url(self):
         env_headers = {'HTTP_X_SERVICE_CATALOG':
-                       '''[{"endpoints_links": [],
-                            "endpoints": [{"adminURL":
-                                           "http://admin_host:8774",
-                                           "region": "RegionOne",
-                                           "internalURL":
-                                           "http://internal_host:8774"}],
-                             "type": "compute",
-                             "name": "nova"}]''',
-                       'HTTP_X_USER_ID': 'user_id',
-                       'HTTP_X_USER_NAME': 'user_name',
+                           '''[{"endpoints_links": [],
+                                "endpoints": [{"adminURL":
+                                               "http://admin_host:8774",
+                                               "region": "RegionOne",
+                                               "internalURL":
+                                               "http://internal_host:8774"}],
+                                 "type": "compute",
+                                 "name": "nova"}]''',
+                       'HTTP_X_USER_ID': self.user_id,
+                       'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
-                       'HTTP_X_PROJECT_ID': 'tenant_id',
+                       'HTTP_X_PROJECT_ID': self.project_id,
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
@@ -282,18 +318,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_endpoint_missing_admin_url(self):
         env_headers = {'HTTP_X_SERVICE_CATALOG':
-                       '''[{"endpoints_links": [],
-                            "endpoints": [{"region": "RegionOne",
-                                           "publicURL":
-                                           "http://public_host:8774",
-                                           "internalURL":
-                                           "http://internal_host:8774"}],
-                             "type": "compute",
-                             "name": "nova"}]''',
-                       'HTTP_X_USER_ID': 'user_id',
-                       'HTTP_X_USER_NAME': 'user_name',
+                           '''[{"endpoints_links": [],
+                                "endpoints": [{"region": "RegionOne",
+                                               "publicURL":
+                                               "http://public_host:8774",
+                                               "internalURL":
+                                               "http://internal_host:8774"}],
+                                 "type": "compute",
+                                 "name": "nova"}]''',
+                       'HTTP_X_USER_ID': self.user_id,
+                       'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
-                       'HTTP_X_PROJECT_ID': 'tenant_id',
+                       'HTTP_X_PROJECT_ID': self.project_id,
                        'HTTP_X_IDENTITY_STATUS': 'Confirmed',
                        'REQUEST_METHOD': 'GET'}
 
