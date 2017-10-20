@@ -19,9 +19,33 @@ from oslotest import createfile
 import auditmiddleware
 from auditmiddleware.tests.unit import utils
 
-audit_map_content = """
+audit_map_content_nova = """
 service_type: 'compute'
 service_name: 'nova'
+prefix: '/v2/{project_id}'
+
+resources:
+    servers:
+        custom_actions:
+            createBackup: backup
+            confirmResize: update/resize-confirm
+            detail: read/list/details
+        children:
+            os-interfaces:
+                api_name: os-interface
+                custom_id: port_id
+            metadata:
+                singleton: true
+                custom_actions:
+                  'GET:*': 'read/metadata/*'
+                  'PUT:*': 'update/metadata/*'
+                  'DELETE:*': 'delete/metadata/*'
+"""
+
+audit_map_content_glance = """
+service_type: 'image'
+service_name: 'glance'
+prefix: '/v2'
 
 resources:
     servers:
@@ -41,7 +65,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         global user_counter
 
         self.audit_map_file_fixture = self.useFixture(
-            createfile.CreateFileWithContent('audit', audit_map_content,
+            createfile.CreateFileWithContent('audit', audit_map_content_nova,
                                              ext=".yaml"))
 
         self.cfg = self.useFixture(cfg_fixture.Config())

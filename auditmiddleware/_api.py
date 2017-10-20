@@ -14,7 +14,7 @@ import collections
 
 import yaml
 from oslo_log import log as logging
-from pycadf import cadftaxonomy as taxonomy
+from pycadf import cadftaxonomy as taxonomy, endpoint
 from pycadf import cadftype
 from pycadf import credential
 from pycadf import eventfactory
@@ -24,8 +24,15 @@ from pycadf import resource
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_uri', 'el_type_uri', 'singleton',
-                                       'custom_actions',
+                                       'id_field', 'custom_actions',
                                        'children'])
+
+method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
+                       'HEAD': taxonomy.ACTION_READ, 'PUT':
+                           taxonomy.ACTION_UPDATE,
+                       'PATCH': taxonomy.ACTION_UPDATE, 'POST':
+                           taxonomy.ACTION_CREATE,
+                       'DELETE': taxonomy.ACTION_DELETE}
 
 
 class ConfigError(Exception):
@@ -89,7 +96,7 @@ class OpenStackAuditMiddleware(object):
             raise ConfigError('Error opening config file %s: %s',
                               cfg_file, err)
 
-    def _parse_resources(self, res_dict, parentTypeURI=None):
+    def _parse_resources(self, res_dict, parent_type_uri=None):
         result = {}
 
         for name, s in res_dict.iteritems():
@@ -98,25 +105,33 @@ class OpenStackAuditMiddleware(object):
             else:
                 spec = s
 
-            if parentTypeURI:
-                pfx = parentTypeURI
+            if parent_type_uri:
+                pfx = parent_type_uri
             else:
                 pfx = self._service_type
 
+            rest_name = spec.get('api_name', name)
             singleton = spec.get('singleton', False)
             type_uri = spec.get('type_uri', pfx + "/" + name)
-            el_type_uri = type_uri + '/' + name[:-1] if not singleton else None
+            el_type_uri = None
+            childs_parent_type_uri = None
+            if not singleton:
+                el_type_uri = type_uri[:-1]
+                childs_parent_type_uri = el_type_uri
+            else:
+                childs_parent_type_uri = type_uri
 
             spec = ResourceSpec(type_uri, el_type_uri,
                                 singleton,
+                                spec.get('custom_id', 'id'),
                                 spec.get('custom_actions', {}),
                                 self._parse_resources(spec.get('children', {}),
-                                                      type_uri))
-            _put_hier(result, name, spec)
+                                                      childs_parent_type_uri))
+            _put_hier(result, rest_name, spec)
 
         return result
 
-    def _build_event(self, res_node, res_id, res_parent_id, request, response,
+    def _build_event(self, res_spec, res_id, res_parent_id, request, response,
                      path, cursor=0):
         """ Parse a resource item
 
@@ -129,17 +144,9 @@ class OpenStackAuditMiddleware(object):
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
             # end of path reached, create the event
-            event = self._create_event(res_node, res_id or res_parent_id,
-                                       request, response, None)
-            if request.method == 'POST' and response and response.json:
-                payload = response.json
-                name = payload.get('name')
-                if name is None:
-                    name = payload.get('displayName')
-                event.target = resource.Resource(payload.get('id'),
-                                                 res_node.type_uri, name)
-
-            return event
+            return self._create_crud_event(res_id, res_parent_id,
+                                           res_spec,
+                                           request, response)
 
         # Find next path segment (skip leading / with +1)
         next_pos = path.find('/', cursor + 1)
@@ -151,42 +158,62 @@ class OpenStackAuditMiddleware(object):
             token = path[cursor + 1:]
 
         # handle the current token
-        if isinstance(res_node, dict):
+        if isinstance(res_spec, dict):
             # the node contains a dict => handle token as resource name
-            res_node = res_node.get(token)
-            if res_node is None:
+            res_spec = res_spec.get(token)
+            if res_spec is None:
                 # no such name, ignore/filter the resource
                 self._log.warning(
                     "Incomplete resource path after segment %s: %s", token,
                     request.path)
                 return None
 
-            return self._build_event(res_node, None, None, request, response,
+            return self._build_event(res_spec, None, None, request, response,
                                      path, next_pos)
-        elif isinstance(res_node, ResourceSpec):
+        elif isinstance(res_spec, ResourceSpec):
             # if the ID is set or it is a singleton
             # next up is an action or child
-            if res_id or res_node.singleton:
-                child_res = res_node.children.get(token)
+            if res_id or res_spec.singleton:
+                child_res = res_spec.children.get(token)
                 if child_res:
                     # the ID is still the one of the parent
                     return self._build_event(child_res, None,
                                              res_id or res_parent_id, request,
                                              response, path, next_pos)
-                elif next_pos == -1:
-                    # this must be an action
-                    return self._create_event(res_node,
-                                              res_id or res_parent_id,
-                                              request, response, token)
-            else:
-                # next up should be an ID
-                return self._build_event(res_node, token, res_parent_id,
+            elif token not in res_spec.custom_actions:
+                # next up should be an ID (unless it is a known action)
+                return self._build_event(res_spec, token, res_parent_id,
                                          request, response, path, next_pos)
+
+            if next_pos == -1:
+                # this must be an action
+                return self._create_event(res_spec,
+                                          res_id or res_parent_id,
+                                          request, response, token)
 
         self._log.warning(
             "Unexpected continuation of resource path after segment %s: %s",
             token, request.path)
         return None
+
+    def _create_crud_event(self, res_id, res_parent_id, res_spec, request,
+                           response):
+        # singletons cannot have their own ID, so we take the parent's one
+        rid = res_parent_id if res_spec.singleton else res_id
+
+        event = self._create_event(res_spec, rid,
+                                   request, response, None)
+        # on create, requests the ID is available only after the response
+        if not rid and response and response.has_body and \
+           response.content_type == "application/json":
+            payload = response.json
+            name = payload.get('name')
+            if name is None:
+                name = payload.get('displayName')
+            event.target = resource.Resource(payload.get(
+                res_spec.id_field, res_parent_id),
+                res_spec.el_type_uri or res_spec.type_uri, name)
+        return event
 
     def _get_action(self, res_spec, res_id, request, action_suffix):
         """Given a resource spec, a request and a path suffix, deduct
@@ -213,27 +240,22 @@ class OpenStackAuditMiddleware(object):
 
         """
         method = request.method
+        if action_suffix is None:
+            return self._map_method_to_action(method, res_id)
 
+        return self._map_action_suffix(res_spec, action_suffix, method,
+                                       res_id, request)
+
+    def _map_method_to_action(self, method, res_id):
         if method == 'POST':
-            if action_suffix is None:
-                return taxonomy.ACTION_CREATE
-
-            return self._get_custom_action(res_spec, action_suffix, request)
+            return taxonomy.ACTION_UPDATE if res_id else \
+                taxonomy.ACTION_CREATE
         elif method == 'GET':
-            if action_suffix is None:
-                return taxonomy.ACTION_READ if res_id else taxonomy.ACTION_LIST
+            return taxonomy.ACTION_READ if res_id else taxonomy.ACTION_LIST
+        return method_taxonomy_map[method]
 
-            return self._get_custom_action(res_spec, action_suffix, request)
-        elif method == 'PUT' or method == 'PATCH':
-            return taxonomy.ACTION_UPDATE
-        elif method == 'DELETE':
-            return taxonomy.ACTION_DELETE
-        elif method == 'HEAD':
-            return taxonomy.ACTION_READ
-        else:
-            return None
-
-    def _get_custom_action(self, res_spec, action_suffix, request):
+    def _map_action_suffix(self, res_spec, action_suffix, method, res_id,
+                           request):
         rest_action = ''
         if action_suffix == 'action':
             try:
@@ -255,14 +277,15 @@ class OpenStackAuditMiddleware(object):
             return action
 
         # check for generic mapping
-        action = res_spec.custom_actions.get('*')
+        action = res_spec.custom_actions.get(method + ':*')
         if action is not None and action is not '':
             return action.replace('*', rest_action)
 
         # use defaults if no custom action mapping exists
         if not res_spec.custom_actions:
-            # if there are no custom_actions defined, we will just
-            return taxonomy.ACTION_UPDATE + "/" + rest_action
+            # if there are no custom_actions defined, we will just ...
+            return (self._map_method_to_action(method, res_id) + "/" +
+                    rest_action)
         else:
             self._log.debug("action %s is filtered out", rest_action)
             return None
@@ -270,7 +293,11 @@ class OpenStackAuditMiddleware(object):
     def create_event(self, request, response=None):
         # drop the endpoint's path prefix
         path = self._strip_url_prefix(request)
+        if not path:
+            return None
+
         path = path[:-1] if path.endswith('/') else path
+        path = path[:-5] if path.endswith('.json') else path
         return self._build_event(self._resource_specs, None, None, request,
                                  response, path, 0)
 
@@ -319,7 +346,7 @@ class OpenStackAuditMiddleware(object):
             target = resource.Resource(id=res_id, typeURI=rtype)
         else:
             # use the service as resource if element has been addressed
-            target = self._build_target_service_resource(request, res_spec)
+            target = self._build_target_service_resource(res_spec, request)
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
             outcome=action_result,
@@ -343,7 +370,9 @@ class OpenStackAuditMiddleware(object):
         target_type_uri = 'service/' + res_spec.type_uri
         target = resource.Resource(typeURI=target_type_uri,
                                    id=self._service_name)
-        return target.add_address(req.path_url)
+        target.add_address(endpoint.Endpoint(req.path_url))
+
+        return target
 
     def _strip_url_prefix(self, request):
         """ Removes the prefix from the URL paths, e.g. '/V2/{project_id}/'

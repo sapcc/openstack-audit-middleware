@@ -116,26 +116,31 @@ Example (Nova)::
   # - /<resources>/<resource-id>/<child-resource>/<child-resource-id>: like parent
   # - /<resources>/<resource-id>/<child-resource-singleton>: singleton resource (e.g. attribute), no own ID
   resources:
-      servers: # resource name, placed first in the URL path (with an added "s"), followed by the ID
-          # type URI of the resource, defaults to <service-key>/<resources>
-          # the target id of the resource (list) type is refering to the service
-          type_uri: compute/servers
-          # the target id of the resource element type is refering to the element
-          el_type_uri: compute/servers/server
-          # URL-endcoded actions, last part of the URL path, following the ID of the target (child-)resource
-          # or "action" in which case the actual action is the first and only element of the JSON payload
-          custom_actions:
-              # <url-path-suffix>: <cadf-action>
-              startup: start/startup
+    servers: # resource name, placed first in the URL path (with an added "s"), followed by the ID
+        # type URI of the resource, defaults to <service-key>/<resources>
+        # the target id of the resource (list) type is refering to the service
+        type_uri: compute/servers
+        # the target id of the resource element type is refering to the element
+        el_type_uri: compute/server
+        # URL-endcoded actions, last part of the URL path, following the ID of the target (child-)resource
+        # or "action" in which case the actual action is the first and only element of the JSON payload
+        custom_actions:
+          # <url-path-suffix>: <cadf-action>
+          startup: start/startup
           # child resources, placed after the parent resource ID in the URL path
-          children:
-             migrations:
-                  # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
-                  # type_uri: compute/servers/migrations
-                  # element type URI of the resource, defaults to <parent-type_uri>/<resource> (singular form)
-                  el_type_uri: compute/servers/migrations/migration
-             os-server-password:
-                  # this is an attribute, so there is only a single resource per parent
-                  # that means no pluralization of the resource name in the URL and no ID
-                  singleton: true
+        children:
+          migrations:
+            # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
+            # type_uri: compute/server/migrations
+            # element type URI of the resource, defaults to <parent-(el_)type_uri>/<resource> (singular form)
+              el_type_uri: compute/server/migration
+          os-interfaces:
+            # for some reason Nova does not use plural for the os-interfaces of a server
+            rest_name: 'os-interface'
+            # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
+            custom_id: port_id
+          os-server-password:
+            # this is an attribute, so there is only a single resource per parent
+            # that means no pluralization of the resource name in the URL and no ID
+            singleton: true
 ```
