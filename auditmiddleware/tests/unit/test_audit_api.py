@@ -46,8 +46,9 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         if resp_code == 0:
             resp.status_code = \
-            {'GET': 200, 'HEAD': 200, 'POST': 201, 'PUT': 200, 'DELETE': 204}[
-                method]
+                {'GET': 200, 'HEAD': 200, 'POST': 201, 'PUT': 200,
+                 'DELETE': 204}[
+                    method]
             if method == 'POST' and not resp_json:
                 resp.status_code = 204
         else:
@@ -66,7 +67,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(event['outcome'], outcome)
         self.assertEqual(event['eventType'], 'activity')
         self.assertEqual(event['target'].get('name'), target_name)
-        self.assertEqual(event['target'].get('id'), target_id or self.project_id)
+        self.assertEqual(event['target'].get('id'),
+                         target_id or self.project_id)
         self.assertEqual(event['target']['typeURI'], target_type_uri)
         self.assertEqual(event['initiator']['id'], self.user_id)
         self.assertEqual(event['initiator'].get('name'), self.username)
@@ -86,12 +88,15 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             self.assertNotIn('reporterchain', event)
         else:
             self.assertEqual(event['reason']['reasonType'], 'HTTP')
-            self.assertEqual(event['reason']['reasonCode'], str(response.status_code))
+            self.assertEqual(event['reason']['reasonCode'],
+                             str(response.status_code))
 
         # TODO check observer
         self.assertEqual(event['requestPath'], request.path)
 
-    def build_url(self, res, host_url=None, prefix='', action=None, res_id=None, child_res=None, child_res_id=None):
+    def build_url(self, res, host_url=None, prefix='', action=None,
+                  res_id=None,
+                  child_res=None, child_res_id=None):
         url = host_url if host_url else 'http://admin_host:8774' + prefix
         url += '/' + res
         url += '/' + res_id if res_id else ''
@@ -106,15 +111,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_LIST, "compute/servers")
+        self.check_event(request, response, event, taxonomy.ACTION_LIST,
+                         "compute/servers")
 
     def test_get_read(self):
         rid = str(uuid.uuid4().hex)
-        url = self.build_url('servers', prefix='/v2/' + self.project_id, res_id=rid)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid)
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_READ, "compute/servers/server", rid)
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "compute/servers/server", rid)
 
     def test_get_unknown_endpoint(self):
         url = 'http://unknown:8774/v2/' + self.project_id + '/servers'
@@ -252,18 +260,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          'target')
 
     def test_missing_catalog_endpoint_id(self):
-        env_headers = {'HTTP_X_SERVICE_CATALOG':
-                           '''[{"endpoints_links": [],
-                                "endpoints": [{"adminURL":
-                                               "http://admin_host:8774",
-                                               "region": "RegionOne",
-                                               "publicURL":
-                                               "http://public_host:8774",
-                                               "internalURL":
-                                               "http://internal_host:8774"}],
-                                "type": "compute",
-                                "name": "nova"}]''',
-                       'HTTP_X_USER_ID': self.user_id,
+        env_headers = {'HTTP_X_USER_ID': self.user_id,
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,
@@ -275,16 +272,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(payload['target']['id'], 'nova')
 
     def test_endpoint_missing_internal_url(self):
-        env_headers = {'HTTP_X_SERVICE_CATALOG':
-                           '''[{"endpoints_links": [],
-                                "endpoints": [{"adminURL":
-                                               "http://admin_host:8774",
-                                               "region": "RegionOne",
-                                               "publicURL":
-                                               "http://public_host:8774"}],
-                                 "type": "compute",
-                                 "name": "nova"}]''',
-                       'HTTP_X_USER_ID': self.user_id,
+        env_headers = {'HTTP_X_USER_ID': self.user_id,
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,
@@ -296,16 +284,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual((payload['target']['addresses'][1]['url']), "unknown")
 
     def test_endpoint_missing_public_url(self):
-        env_headers = {'HTTP_X_SERVICE_CATALOG':
-                           '''[{"endpoints_links": [],
-                                "endpoints": [{"adminURL":
-                                               "http://admin_host:8774",
-                                               "region": "RegionOne",
-                                               "internalURL":
-                                               "http://internal_host:8774"}],
-                                 "type": "compute",
-                                 "name": "nova"}]''',
-                       'HTTP_X_USER_ID': self.user_id,
+        env_headers = {'HTTP_X_USER_ID': self.user_id,
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,
@@ -317,16 +296,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual((payload['target']['addresses'][2]['url']), "unknown")
 
     def test_endpoint_missing_admin_url(self):
-        env_headers = {'HTTP_X_SERVICE_CATALOG':
-                           '''[{"endpoints_links": [],
-                                "endpoints": [{"region": "RegionOne",
-                                               "publicURL":
-                                               "http://public_host:8774",
-                                               "internalURL":
-                                               "http://internal_host:8774"}],
-                                 "type": "compute",
-                                 "name": "nova"}]''',
-                       'HTTP_X_USER_ID': self.user_id,
+        env_headers = {'HTTP_X_USER_ID': self.user_id,
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,

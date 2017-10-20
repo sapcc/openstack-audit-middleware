@@ -21,14 +21,14 @@ provides.
 
 import copy
 import functools
+
 import webob.dec
-
-from auditmiddleware import _api, _notifier
 from keystonemiddleware._common import config
-
 from oslo_config import cfg
 from oslo_context import context as oslo_context
 from oslo_log import log as logging
+
+from auditmiddleware import _api, _notifier
 
 _LOG = None
 AUDIT_MIDDLEWARE_GROUP = 'audit_middleware_notifications'
@@ -64,8 +64,10 @@ def _log_and_ignore_error(fn):
 
     return wrapper
 
+
 class ConfigError(BaseException):
     pass
+
 
 class AuditMiddleware(object):
     """Create an audit event based on request/response.
