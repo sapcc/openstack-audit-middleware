@@ -11,44 +11,31 @@
 # under the License.
 
 import collections
-import re
 
-import six
+import yaml
 from oslo_log import log as logging
-from oslo_serialization import jsonutils
-from pycadf import cadftaxonomy as taxonomy
+from pycadf import cadftaxonomy as taxonomy, endpoint
 from pycadf import cadftype
 from pycadf import credential
-from pycadf import endpoint
-from pycadf import eventfactory as factory
+from pycadf import eventfactory
 from pycadf import host
-from pycadf import identifier
+from pycadf import reason
 from pycadf import resource
-from pycadf import tag
-from six.moves import configparser
-from six.moves.urllib import parse as urlparse
 
-# NOTE(blk-u): Compatibility for Python 2. SafeConfigParser and
-# SafeConfigParser.readfp are deprecated in Python 3. Remove this when we drop
-# support for Python 2.
-if six.PY2:
-    class _ConfigParser(configparser.SafeConfigParser):
-        read_file = configparser.SafeConfigParser.readfp
-else:
-    _ConfigParser = configparser.ConfigParser
+ResourceSpec = collections.namedtuple('ResourceSpec',
+                                      ['type_uri', 'el_type_uri', 'singleton',
+                                       'id_field', 'custom_actions',
+                                       'children'])
 
-Service = collections.namedtuple('Service',
-                                 ['id', 'name', 'type', 'admin_endp',
-                                  'public_endp', 'private_endp'])
-
-AuditMap = collections.namedtuple('AuditMap',
-                                  ['path_kw',
-                                   'custom_actions',
-                                   'service_endpoints',
-                                   'default_target_endpoint_type'])
+method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
+                       'HEAD': taxonomy.ACTION_READ, 'PUT':
+                           taxonomy.ACTION_UPDATE,
+                       'PATCH': taxonomy.ACTION_UPDATE, 'POST':
+                           taxonomy.ACTION_CREATE,
+                       'DELETE': taxonomy.ACTION_DELETE}
 
 
-class PycadfAuditApiConfigError(Exception):
+class ConfigError(Exception):
     """Error raised when pyCADF fails to configure correctly."""
 
     pass
@@ -71,58 +58,145 @@ class KeystoneCredential(credential.Credential):
 class OpenStackAuditMiddleware(object):
     def __init__(self, cfg_file, log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
-        path_kw = {}
-        custom_actions = {}
-        endpoints = {}
-        default_target_endpoint_type = None
-
-        if cfg_file.endswith:
-            try:
-                map_conf = _ConfigParser()
-                map_conf.read_file(open(cfg_file))
-
-                try:
-                    default_target_endpoint_type = map_conf.get(
-                        'DEFAULT', 'target_endpoint_type')
-                except configparser.NoOptionError:  # nosec
-                    # Ignore the undefined config option,
-                    # default_target_endpoint_type remains None which is valid.
-                    pass
-
-                try:
-                    custom_actions = dict(map_conf.items('custom_actions'))
-                except configparser.Error:  # nosec
-                    # custom_actions remains {} which is valid.
-                    pass
-
-                try:
-                    path_kw = dict(map_conf.items('path_keywords'))
-                except configparser.Error:  # nosec
-                    # path_kw remains {} which is valid.
-                    pass
-
-                try:
-                    endpoints = dict(map_conf.items('service_endpoints'))
-                except configparser.Error:  # nosec
-                    # endpoints remains {} which is valid.
-                    pass
-            except configparser.ParsingError as err:
-                raise PycadfAuditApiConfigError(
-                    'Error parsing audit map file: %s' % err)
-
         self._log = log
-        self._MAP = AuditMap(
-            path_kw=path_kw, custom_actions=custom_actions,
-            service_endpoints=endpoints,
-            default_target_endpoint_type=default_target_endpoint_type)
 
-    @staticmethod
-    def _clean_path(value):
-        """Clean path if path has json suffix."""
-        return value[:-5] if value.endswith('.json') else value
+        try:
+            conf = yaml.safe_load(open(cfg_file, 'r'))
 
-    def get_action(self, req):
-        """Take a given Request, parse url path to calculate action type.
+            self._service_type = conf['service_type']
+            self._service_name = conf['service_name']
+            self._prefix_template = conf['prefix']
+            # default_target_endpoint_type = conf.get('target_endpoint_type')
+            # self._service_endpoints = conf.get('service_endpoints', {})
+            self._resource_specs = self._parse_resources(conf['resources'])
+
+        except KeyError as err:
+            raise ConfigError('Missing config property in %s: %s', cfg_file,
+                              str(err))
+        except (OSError, yaml.YAMLError) as err:
+            raise ConfigError('Error opening config file %s: %s',
+                              cfg_file, err)
+
+    def _parse_resources(self, res_dict, parent_type_uri=None):
+        result = {}
+
+        for name, s in res_dict.iteritems():
+            if not s:
+                spec = {}
+            else:
+                spec = s
+
+            if parent_type_uri:
+                pfx = parent_type_uri
+            else:
+                pfx = self._service_type
+
+            rest_name = spec.get('api_name', name)
+            singleton = spec.get('singleton', False)
+            type_uri = spec.get('type_uri', pfx + "/" + name)
+            el_type_uri = None
+            childs_parent_type_uri = None
+            if not singleton:
+                el_type_uri = type_uri[:-1]
+                childs_parent_type_uri = el_type_uri
+            else:
+                childs_parent_type_uri = type_uri
+
+            spec = ResourceSpec(type_uri, el_type_uri,
+                                singleton,
+                                spec.get('custom_id', 'id'),
+                                spec.get('custom_actions', {}),
+                                self._parse_resources(spec.get('children', {}),
+                                                      childs_parent_type_uri))
+            result[rest_name] = spec
+
+        return result
+
+    def _build_event(self, res_spec, res_id, res_parent_id, request, response,
+                     path, cursor=0):
+        """ Parse a resource item
+
+        :param res_tree:
+        :param path:
+        :param cursor:
+        :return: the event
+        """
+
+        # Check if the end of path is reached and event can be created finally
+        if cursor == -1:
+            # end of path reached, create the event
+            return self._create_crud_event(res_id, res_parent_id,
+                                           res_spec,
+                                           request, response)
+
+        # Find next path segment (skip leading / with +1)
+        next_pos = path.find('/', cursor + 1)
+        token = None
+        if next_pos != -1:
+            # that means there are more path segments
+            token = path[cursor + 1:next_pos]
+        else:
+            token = path[cursor + 1:]
+
+        # handle the current token
+        if isinstance(res_spec, dict):
+            # the node contains a dict => handle token as resource name
+            res_spec = res_spec.get(token)
+            if res_spec is None:
+                # no such name, ignore/filter the resource
+                return None
+
+            return self._build_event(res_spec, None, None, request, response,
+                                     path, next_pos)
+        elif isinstance(res_spec, ResourceSpec):
+            # if the ID is set or it is a singleton
+            # next up is an action or child
+            if res_id or res_spec.singleton:
+                child_res = res_spec.children.get(token)
+                if child_res:
+                    # the ID is still the one of the parent
+                    return self._build_event(child_res, None,
+                                             res_id or res_parent_id, request,
+                                             response, path, next_pos)
+            elif res_spec.custom_actions and token not in \
+                    res_spec.custom_actions:
+                # next up should be an ID (unless it is a known action)
+                return self._build_event(res_spec, token, res_parent_id,
+                                         request, response, path, next_pos)
+
+            if next_pos == -1:
+                # this must be an action
+                return self._create_event(res_spec,
+                                          res_id or res_parent_id,
+                                          request, response, token)
+
+        self._log.warning(
+            "Unexpected continuation of resource path after segment %s: %s",
+            token, request.path)
+        return None
+
+    def _create_crud_event(self, res_id, res_parent_id, res_spec, request,
+                           response):
+        # singletons cannot have their own ID, so we take the parent's one
+        rid = res_parent_id if res_spec.singleton else res_id
+
+        event = self._create_event(res_spec, rid,
+                                   request, response, None)
+        # on create, requests the ID is available only after the response
+        if not rid and response and response.has_body and \
+           response.content_type == "application/json":
+            payload = response.json
+            name = payload.get('name')
+            if name is None:
+                name = payload.get('displayName')
+            event.target = resource.Resource(payload.get(
+                res_spec.id_field, res_parent_id),
+                res_spec.el_type_uri or res_spec.type_uri, name)
+        return event
+
+    def _get_action(self, res_spec, res_id, request, action_suffix):
+        """Given a resource spec, a request and a path suffix, deduct
+        the correct CADF action.
 
         Depending on req.method:
 
@@ -130,7 +204,8 @@ class OpenStackAuditMiddleware(object):
 
         - path ends with 'action', read the body and use as action;
         - path ends with known custom_action, take action from config;
-        - request ends with known path, assume is create action;
+        - request ends with known (child-)resource type, assume is create
+        action
         - request ends with unknown path, assume is update action.
 
         if GET:
@@ -143,163 +218,151 @@ class OpenStackAuditMiddleware(object):
         if HEAD, assume read action.
 
         """
-        path = req.path[:-1] if req.path.endswith('/') else req.path
-        url_ending = self._clean_path(path[path.rfind('/') + 1:])
-        method = req.method
+        method = request.method
+        if action_suffix is None:
+            return self._map_method_to_action(method, res_id)
 
-        if url_ending + '/' + method.lower() in self._MAP.custom_actions:
-            action = self._MAP.custom_actions[url_ending + '/' +
-                                              method.lower()]
-        elif url_ending in self._MAP.custom_actions:
-            action = self._MAP.custom_actions[url_ending]
-        elif method == 'POST':
-            if url_ending == 'action':
-                try:
-                    if req.json:
-                        body_action = list(req.json.keys())[0]
-                        action = taxonomy.ACTION_UPDATE + '/' + body_action
-                    else:
-                        action = taxonomy.ACTION_CREATE
-                except ValueError:
-                    action = taxonomy.ACTION_CREATE
-            elif url_ending not in self._MAP.path_kw:
-                action = taxonomy.ACTION_UPDATE
-            else:
-                action = taxonomy.ACTION_CREATE
+        return self._map_action_suffix(res_spec, action_suffix, method,
+                                       res_id, request)
+
+    def _map_method_to_action(self, method, res_id):
+        if method == 'POST':
+            return taxonomy.ACTION_UPDATE if res_id else \
+                taxonomy.ACTION_CREATE
         elif method == 'GET':
-            if url_ending in self._MAP.path_kw:
-                action = taxonomy.ACTION_LIST
-            else:
-                action = taxonomy.ACTION_READ
-        elif method == 'PUT' or method == 'PATCH':
-            action = taxonomy.ACTION_UPDATE
-        elif method == 'DELETE':
-            action = taxonomy.ACTION_DELETE
-        elif method == 'HEAD':
-            action = taxonomy.ACTION_READ
+            return taxonomy.ACTION_READ if res_id else taxonomy.ACTION_LIST
+        return method_taxonomy_map[method]
+
+    def _map_action_suffix(self, res_spec, action_suffix, method, res_id,
+                           request):
+        rest_action = ''
+        if action_suffix == 'action':
+            try:
+                payload = request.json
+                if payload:
+                    rest_action = next(iter(payload))
+                else:
+                    return None
+            except ValueError:
+                self._log.warning(
+                    "unexpected empty action payload for path: %s",
+                    request.path)
+                return None
         else:
-            action = taxonomy.UNKNOWN
+            rest_action = action_suffix
 
-        return action
+        # check for individual mapping of action
+        action = res_spec.custom_actions.get(rest_action)
+        if action is not None:
+            return action
 
-    def _get_service_info(self, endp):
-        service = Service(
-            type=self._MAP.service_endpoints.get(
-                endp['type'],
-                taxonomy.UNKNOWN),
-            name=endp['name'],
-            id=endp['endpoints'][0].get('id', endp['name']),
-            admin_endp=endpoint.Endpoint(
-                name='admin',
-                url=endp['endpoints'][0].get('adminURL', taxonomy.UNKNOWN)),
-            private_endp=endpoint.Endpoint(
-                name='private',
-                url=endp['endpoints'][0].get('internalURL', taxonomy.UNKNOWN)),
-            public_endp=endpoint.Endpoint(
-                name='public',
-                url=endp['endpoints'][0].get('publicURL', taxonomy.UNKNOWN)))
+        # check for generic mapping
+        action = res_spec.custom_actions.get(method + ':*')
+        if action is not None and action is not '':
+            return action.replace('*', rest_action)
 
-        return service
-
-    def _build_typeURI(self, req, service_type):
-        """Build typeURI of target.
-
-        Combines service type and corresponding path for greater detail.
-        """
-        type_uri = ''
-        prev_key = None
-        for key in re.split('/', req.path):
-            key = self._clean_path(key)
-            if key in self._MAP.path_kw:
-                type_uri += '/' + key
-            elif prev_key in self._MAP.path_kw:
-                type_uri += '/' + self._MAP.path_kw[prev_key]
-            prev_key = key
-        return service_type + type_uri
-
-    def _build_target(self, req, service):
-        """Build target resource."""
-        target_typeURI = (
-            self._build_typeURI(req, service.type)
-            if service.type != taxonomy.UNKNOWN else service.type)
-        target = resource.Resource(typeURI=target_typeURI,
-                                   id=service.id, name=service.name)
-        if service.admin_endp:
-            target.add_address(service.admin_endp)
-        if service.private_endp:
-            target.add_address(service.private_endp)
-        if service.public_endp:
-            target.add_address(service.public_endp)
-        return target
-
-    def get_target_resource(self, req):
-        """Retrieve target information.
-
-        If discovery is enabled, target will attempt to retrieve information
-        from service catalog. If not, the information will be taken from
-        given config file.
-        """
-        service_info = Service(type=taxonomy.UNKNOWN, name=taxonomy.UNKNOWN,
-                               id=taxonomy.UNKNOWN, admin_endp=None,
-                               private_endp=None, public_endp=None)
-
-        catalog = {}
-        try:
-            catalog = jsonutils.loads(req.environ['HTTP_X_SERVICE_CATALOG'])
-        except KeyError:
-            self._log.warning(
-                'Unable to discover target information because '
-                'service catalog is missing. Either the incoming '
-                'request does not contain an auth token or auth '
-                'token does not contain a service catalog. For '
-                'the latter, please make sure the '
-                '"include_service_catalog" property in '
-                'auth_token middleware is set to "True"')
-
-        default_endpoint = None
-        for endp in catalog:
-            endpoint_urls = endp['endpoints'][0]
-            admin_urlparse = urlparse.urlparse(
-                endpoint_urls.get('adminURL', ''))
-            public_urlparse = urlparse.urlparse(
-                endpoint_urls.get('publicURL', ''))
-            req_url = urlparse.urlparse(req.host_url)
-            if req_url.netloc == admin_urlparse.netloc or \
-               req_url.netloc == public_urlparse.netloc:
-                service_info = self._get_service_info(endp)
-                break
-            elif (self._MAP.default_target_endpoint_type and
-                  endp['type'] == self._MAP.default_target_endpoint_type):
-                default_endpoint = endp
+        # use defaults if no custom action mapping exists
+        if not res_spec.custom_actions:
+            # if there are no custom_actions defined, we will just ...
+            return (self._map_method_to_action(method, res_id) + "/" +
+                    rest_action)
         else:
-            if default_endpoint:
-                service_info = self._get_service_info(default_endpoint)
-        return self._build_target(req, service_info)
+            self._log.debug("action %s is filtered out", rest_action)
+            return None
 
-    def _create_event(self, req):
-        correlation_id = identifier.generate_uuid()
-        action = self.get_action(req)
+    def create_event(self, request, response=None):
+        # drop the endpoint's path prefix
+        path = self._strip_url_prefix(request)
+        if not path:
+            return None
 
+        path = path[:-1] if path.endswith('/') else path
+        path = path[:-5] if path.endswith('.json') else path
+        return self._build_event(self._resource_specs, None, None, request,
+                                 response, path, 0)
+
+    def _create_event(self, res_spec, res_id, request, response,
+                      action_suffix):
+        action = self._get_action(res_spec, res_id, request, action_suffix)
+        if not action:
+            # skip if action filtered out
+            return
+
+        project_or_domain_id = request.environ.get(
+            'HTTP_X_PROJECT_ID') or request.environ.get(
+            'HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN)
         initiator = ClientResource(
             typeURI=taxonomy.ACCOUNT_USER,
-            id=req.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
-            name=req.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
-            host=host.Host(address=req.client_addr, agent=req.user_agent),
+            id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
+            name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
+            host=host.Host(address=request.client_addr,
+                           agent=request.user_agent),
             credential=KeystoneCredential(
-                token=req.environ.get('HTTP_X_AUTH_TOKEN', ''),
-                identity_status=req.environ.get('HTTP_X_IDENTITY_STATUS',
-                                                taxonomy.UNKNOWN)),
-            project_id=req.environ.get('HTTP_X_PROJECT_ID', taxonomy.UNKNOWN))
-        target = self.get_target_resource(req)
+                token=request.environ.get('HTTP_X_AUTH_TOKEN', ''),
+                identity_status=request.environ.get('HTTP_X_IDENTITY_STATUS',
+                                                    taxonomy.UNKNOWN)),
+            project_id=project_or_domain_id)
 
-        event = factory.EventFactory().new_event(
+        action_result = None
+        event_reason = None
+        if response:
+            if 200 <= response.status_int < 400:
+                action_result = taxonomy.OUTCOME_SUCCESS
+            else:
+                action_result = taxonomy.OUTCOME_FAILURE
+
+            event_reason = reason.Reason(
+                reasonType='HTTP', reasonCode=str(response.status_int))
+        else:
+            action_result = taxonomy.UNKNOWN
+
+        target = None
+        if res_id:
+            rtype = None
+            if action == taxonomy.ACTION_LIST or res_spec.singleton:
+                rtype = res_spec.type_uri
+            else:
+                rtype = res_spec.el_type_uri
+            target = resource.Resource(id=res_id, typeURI=rtype)
+        else:
+            # use the service as resource if element has been addressed
+            target = self._build_target_service_resource(res_spec, request)
+        event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
-            outcome=taxonomy.OUTCOME_PENDING,
+            outcome=action_result,
             action=action,
             initiator=initiator,
-            target=target,
-            observer=resource.Resource(id='target'))
-        event.requestPath = req.path_qs
-        event.add_tag(tag.generate_name_value_tag('correlation_id',
-                                                  correlation_id))
+            # TODO add observer again?
+            reason=event_reason,
+            target=target)
+        event.requestPath = request.path_qs
+        # TODO add reporter step again?
+        # event.add_reporterstep(
+        #    reporterstep.Reporterstep(
+        #        role=cadftype.REPORTER_ROLE_MODIFIER,
+        #        reporter=resource.Resource(id='observer'),
+        #        reporterTime=timestamp.get_utc_now()))
+
         return event
+
+    def _build_target_service_resource(self, res_spec, req):
+        """Build target resource."""
+        target_type_uri = 'service/' + res_spec.type_uri
+        target = resource.Resource(typeURI=target_type_uri,
+                                   id=self._service_name)
+        target.add_address(endpoint.Endpoint(req.path_url))
+
+        return target
+
+    def _strip_url_prefix(self, request):
+        """ Removes the prefix from the URL paths, e.g. '/V2/{project_id}/'
+        :param req: incoming request
+        :return: URL request path without the leading prefix or None if prefix
+        was missing
+        """
+        project_or_domain_id = request.environ.get(
+            'HTTP_X_PROJECT_ID') or request.environ.get(
+            'HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN)
+        prefix = self._prefix_template.format(project_id=project_or_domain_id)
+        return request.path[len(prefix):] if request.path.startswith(prefix) \
+            else None

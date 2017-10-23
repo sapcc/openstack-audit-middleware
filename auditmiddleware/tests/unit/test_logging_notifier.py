@@ -29,7 +29,8 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
         app = self.create_simple_app()
 
         with mock.patch('auditmiddleware._LOG.info') as log:
-            app.get('/foo/bar', extra_environ=self.get_environ_header())
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
 
             # Check notification'
             call_args = log.call_args_list[0][0]

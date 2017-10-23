@@ -1,0 +1,12 @@
+language: python
+python:
+  - "2.7"
+#  - "3.2"
+#  - "3.3"
+#  - "pypy"
+install:
+  - pip install tox flake8 nose mock stestr
+  - pip install -q .
+before_script:
+#  - flake8 auditmiddleware setup.py
+script: tox -e py27 -e pep8
