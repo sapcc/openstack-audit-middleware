@@ -23,7 +23,8 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         app = self.create_simple_app()
         with mock.patch('oslo_messaging.notify._impl_log.LogDriver.notify',
                         side_effect=Exception('error')) as driver:
-            app.get('/foo/bar', extra_environ=self.get_environ_header())
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
             # audit middleware conf has 'log' make sure that driver is invoked
             # and not the one specified in DEFAULT section
             self.assertTrue(driver.called)
@@ -37,7 +38,8 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         app = self.create_simple_app()
         with mock.patch('oslo_messaging.notify._impl_log.LogDriver.notify',
                         side_effect=Exception('error')) as driver:
-            app.get('/foo/bar', extra_environ=self.get_environ_header())
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
             # audit middleware conf has 'log' make sure that driver is invoked
             # and not the one specified in oslo_messaging_notifications section
             self.assertTrue(driver.called)
@@ -52,7 +54,8 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
                         side_effect=Exception('error')) as driver:
             # audit middleware has 'messaging' make sure that driver is invoked
             # and not the one specified in oslo_messaging_notifications section
-            app.get('/foo/bar', extra_environ=self.get_environ_header())
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
             self.assertTrue(driver.called)
 
     def test_with_no_middleware_notification_conf(self):
@@ -66,7 +69,8 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
                         side_effect=Exception('error')) as driver:
             # audit middleware section is not set. So driver needs to be
             # invoked from oslo_messaging_notifications section.
-            app.get('/foo/bar', extra_environ=self.get_environ_header())
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
             self.assertTrue(driver.called)
 
     @mock.patch('oslo_messaging.get_notification_transport')

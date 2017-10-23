@@ -55,25 +55,6 @@ class KeystoneCredential(credential.Credential):
             self.identity_status = identity_status
 
 
-def _put_hier(dct, hier_name, object):
-    """
-    Puts an object with an hierarchical name (a/b/c/...) into a dictionary.
-    The hierarchy implied by the name is mapped to the dictionary hierarchy.
-    :param dct: target dict
-    :param hier_name: hierarchical name h1/h2/.../hn/myname
-    :param object: the object to be placed at the leaf
-    """
-
-    pos = hier_name.find('/')
-    if pos >= 0:
-        segment, rest = hier_name[0:pos], hier_name[pos + 1:]
-        if segment not in dct:
-            dct[segment] = {}
-        _put_hier(dct[segment], rest, object)
-    else:
-        dct[hier_name] = object
-
-
 class OpenStackAuditMiddleware(object):
     def __init__(self, cfg_file, log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
@@ -127,7 +108,7 @@ class OpenStackAuditMiddleware(object):
                                 spec.get('custom_actions', {}),
                                 self._parse_resources(spec.get('children', {}),
                                                       childs_parent_type_uri))
-            _put_hier(result, rest_name, spec)
+            result[rest_name] = spec
 
         return result
 
@@ -163,9 +144,6 @@ class OpenStackAuditMiddleware(object):
             res_spec = res_spec.get(token)
             if res_spec is None:
                 # no such name, ignore/filter the resource
-                self._log.warning(
-                    "Incomplete resource path after segment %s: %s", token,
-                    request.path)
                 return None
 
             return self._build_event(res_spec, None, None, request, response,
@@ -180,7 +158,8 @@ class OpenStackAuditMiddleware(object):
                     return self._build_event(child_res, None,
                                              res_id or res_parent_id, request,
                                              response, path, next_pos)
-            elif token not in res_spec.custom_actions:
+            elif res_spec.custom_actions and token not in \
+                    res_spec.custom_actions:
                 # next up should be an ID (unless it is a known action)
                 return self._build_event(res_spec, token, res_parent_id,
                                          request, response, path, next_pos)
@@ -265,8 +244,9 @@ class OpenStackAuditMiddleware(object):
                 else:
                     return None
             except ValueError:
-                self._log.warning("unexpected empty action payload",
-                                  request.path)
+                self._log.warning(
+                    "unexpected empty action payload for path: %s",
+                    request.path)
                 return None
         else:
             rest_action = action_suffix

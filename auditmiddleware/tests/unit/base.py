@@ -40,17 +40,8 @@ resources:
                   'GET:*': 'read/metadata/*'
                   'PUT:*': 'update/metadata/*'
                   'DELETE:*': 'delete/metadata/*'
-"""
-
-audit_map_content_glance = """
-service_type: 'image'
-service_name: 'glance'
-prefix: '/v2'
-
-resources:
-    servers:
-      custom_actions:
-        '*':
+    os-services:
+        # all default
 """
 
 user_counter = 0

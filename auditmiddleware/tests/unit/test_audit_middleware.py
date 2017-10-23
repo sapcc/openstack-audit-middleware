@@ -109,13 +109,6 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         # the Context is the first argument. Let's verify it.
         self.assertIsInstance(call_args[0], dict)
 
-    def test_cadf_event_scoped_to_request(self):
-        path = '/v2/' + self.project_id + "/servers"
-
-        app = self.create_simple_app()
-        resp = app.get(path, extra_environ=self.get_environ_header())
-        self.assertIsNotNone(resp.request.environ.get('cadf_event'))
-
     def test_cadf_event_scoped_to_request_on_error(self):
         path = '/v2/' + self.project_id + "/servers"
 
@@ -128,6 +121,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
 
         middleware(req)
         self.assertTrue(self.notifier.notify.called)
+        event1 = self.notifier.notify.call_args_list[0][0][1]
 
         req2 = webob.Request.blank(path,
                                    environ=self.get_environ_header('GET'))
@@ -137,7 +131,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         middleware._process_request(req2, webob.response.Response())
         self.assertTrue(self.notifier.notify.called)
         # ensure event is not the same across requests
-        self.assertNotEqual(req.environ['cadf_event'].id,
+        self.assertNotEqual(event1['id'],
                             self.notifier.notify.call_args_list[0][0][1]['id'])
 
     def test_project_name_from_oslo_config(self):
@@ -157,26 +151,10 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
                                   remote_addr='192.168.0.1')
         req.context = {}
         middleware._process_request(req)
-        payload = req.environ['cadf_event'].as_dict()
+        payload = self.notifier.notify.call_args_list[0][0][1]
         self.assertEqual(payload['outcome'], 'unknown')
         self.assertNotIn('reason', payload)
-        self.assertEqual(len(payload['reporterchain']), 1)
+        # self.assertEqual(len(payload['reporterchain']), 1)
         # self.assertEqual(payload['reporterchain'][0]['role'], 'modifier')
         # self.assertEqual(payload['reporterchain'][0]['reporter']['id'],
         # 'target')
-
-    def test_missing_req(self):
-        req = webob.Request.blank('http://admin_host:8774/v2/' +
-                                  str(uuid.uuid4()) + '/servers',
-                                  environ=self.get_environ_header('GET'))
-        req.context = {}
-        self.assertNotIn('cadf_event', req.environ)
-
-        self.create_simple_middleware()._process_request(req,
-                                                         webob.Response())
-        self.assertIn('cadf_event', req.environ)
-        payload = req.environ['cadf_event'].as_dict()
-        self.assertEqual(payload['outcome'], 'success')
-        self.assertEqual(payload['reason']['reasonType'], 'HTTP')
-        self.assertEqual(payload['reason']['reasonCode'], '200')
-        self.assertEqual(payload['observer']['id'], 'target')
