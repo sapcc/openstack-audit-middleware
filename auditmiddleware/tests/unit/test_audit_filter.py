@@ -12,105 +12,15 @@
 
 import uuid
 
-import webob
 from pycadf import cadftaxonomy as taxonomy
 
-import auditmiddleware
 from auditmiddleware.tests.unit import base
-
-JSON = 'application/json'
 
 
 class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
-    def get_payload(self, method, url,
-                    audit_map=None, body=None, environ=None):
-        req, _ = self.build_api_call(method, url, body, environ)
-
-        return self.build_event(req, audit_map)
-
-    def build_event(self, req, resp=None, middleware_cfg=None):
-        cfg = middleware_cfg or self.audit_map
-        middleware = auditmiddleware._api.OpenStackAuditMiddleware(cfg)
-        event = middleware.create_event(req, resp)
-        return event.as_dict() if event else None
-
-    def build_api_call(self, method, url, req_json=None,
-                       resp_json=None, resp_code=0,
-                       environ=None):
-        environ = environ or self.get_environ_header()
-        req = webob.Request.blank(url,
-                                  body=None,
-                                  method=method,
-                                  content_type=JSON,
-                                  environ=environ,
-                                  remote_addr='192.168.0.1')
-        if req_json:
-            req.json = req_json
-
-        resp = webob.Response(content_type=JSON)
-        if resp_json:
-            resp.json = resp_json
-
-        if resp_code == 0:
-            resp.status_code = \
-                {'GET': 200, 'HEAD': 200, 'POST': 201, 'PUT': 200,
-                 'DELETE': 204}[
-                    method]
-            if method == 'POST' and not resp_json:
-                resp.status_code = 204
-        else:
-            resp.status_code = resp_code
-
-        return req, resp
-
-    def check_event(self, request, response, event, action,
-                    target_type_uri,
-                    target_id=None,
-                    target_name=None,
-                    outcome="success"):
-        self.assertEqual(event['action'], action)
-        self.assertEqual(event['typeURI'],
-                         'http://schemas.dmtf.org/cloud/audit/1.0/event')
-        self.assertEqual(event['outcome'], outcome)
-        self.assertEqual(event['eventType'], 'activity')
-        self.assertEqual(event['target'].get('name'), target_name)
-        self.assertEqual(event['target'].get('id'), target_id or 'nova')
-        self.assertEqual(event['target']['typeURI'], target_type_uri)
-        self.assertEqual(event['initiator']['id'], self.user_id)
-        self.assertEqual(event['initiator'].get('name'), self.username)
-        self.assertEqual(event['initiator']['project_id'], self.project_id)
-        self.assertEqual(event['initiator']['host']['address'],
-                         '192.168.0.1')
-        self.assertEqual(event['initiator']['typeURI'],
-                         'service/security/account/user')
-        # TODO: review current behaviour (why have an obfuscated token
-        # instead of a prefix)
-        self.assertNotEqual(event['initiator']['credential']['token'], 'token')
-        self.assertEqual(event['initiator']['credential']['identity_status'],
-                         'Confirmed')
-        # these fields are only available for finished requests
-        if outcome == 'pending':
-            self.assertNotIn('reason', event)
-            self.assertNotIn('reporterchain', event)
-        else:
-            self.assertEqual(event['reason']['reasonType'], 'HTTP')
-            self.assertEqual(event['reason']['reasonCode'],
-                             str(response.status_code))
-
-        # TODO check observer
-        self.assertEqual(event['requestPath'], request.path)
-
-    def build_url(self, res, host_url=None, prefix='', action=None,
-                  res_id=None,
-                  child_res=None, child_res_id=None):
-        url = host_url if host_url else 'http://admin_host:8774' + prefix
-        url += '/' + res
-        url += '/' + res_id if res_id else ''
-        url += '/' + child_res if child_res else ''
-        url += '/' + child_res_id if child_res_id else ''
-        url += '/' + action if action else ''
-
-        return url
+    def setUp(self):
+        super(AuditApiLogicTest, self).setUp()
+        self.service_name = 'nova'
 
     def test_get_list(self):
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
@@ -149,6 +59,19 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_DELETE,
                          "compute/server", rid)
+
+    def test_delete_all(self):
+        """ delete all child-resources at once, i.e. delete w/o child ID
+        :return:
+        """
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid, child_res='tags')
+        request, response = self.build_api_call('DELETE', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_DELETE,
+                         "compute/server/tags", rid)
 
     def test_delete_fail(self):
         rid = str(uuid.uuid4().hex)
@@ -252,7 +175,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "compute/server/os-interface", target_id=child_rid)
+                         "compute/server/interface", target_id=child_rid)
 
     def test_post_action(self):
         rid = str(uuid.uuid4().hex)

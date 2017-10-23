@@ -11,6 +11,7 @@
 # under the License.
 import uuid
 
+import webob
 import webob.dec
 from oslo_config import fixture as cfg_fixture
 from oslo_messaging import conffixture as msg_fixture
@@ -18,6 +19,8 @@ from oslotest import createfile
 
 import auditmiddleware
 from auditmiddleware.tests.unit import utils
+
+JSON = 'application/json'
 
 audit_map_content_nova = """
 service_type: 'compute'
@@ -31,7 +34,7 @@ resources:
             confirmResize: update/resize-confirm
             detail: read/list/details
         children:
-            os-interfaces:
+            interfaces:
                 api_name: os-interface
                 custom_id: port_id
             metadata:
@@ -40,6 +43,7 @@ resources:
                   'GET:*': 'read/metadata/*'
                   'PUT:*': 'update/metadata/*'
                   'DELETE:*': 'delete/metadata/*'
+            tags:
     os-services:
         # all default
 """
@@ -64,6 +68,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
         self.cfg.conf([], project=self.PROJECT_NAME)
 
+        # service_name needs to be redefined by subclass
+        self.service_name = None
         self.project_id = str(uuid.uuid4().hex)
         self.user_id = str(uuid.uuid4().hex)
         self.username = "test user " + str(user_counter)
@@ -92,3 +98,94 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         if req_type:
             env_headers['REQUEST_METHOD'] = req_type
         return env_headers
+
+    def build_event(self, req, resp=None, middleware_cfg=None):
+        cfg = middleware_cfg or self.audit_map
+        middleware = auditmiddleware._api.OpenStackAuditMiddleware(cfg)
+        event = middleware.create_event(req, resp)
+        return event.as_dict() if event else None
+
+    def build_api_call(self, method, url, req_json=None,
+                       resp_json=None, resp_code=0,
+                       environ=None):
+        environ = environ or self.get_environ_header()
+        req = webob.Request.blank(url,
+                                  body=None,
+                                  method=method,
+                                  content_type=JSON,
+                                  environ=environ,
+                                  remote_addr='192.168.0.1')
+        if req_json:
+            req.json = req_json
+
+        resp = webob.Response(content_type=JSON)
+        if resp_json:
+            resp.json = resp_json
+
+        if resp_code == 0:
+            resp.status_code = \
+                {'GET': 200, 'HEAD': 200, 'POST': 201, 'PUT': 200,
+                 'DELETE': 204}[
+                    method]
+            if method == 'POST' and not resp_json:
+                resp.status_code = 204
+        else:
+            resp.status_code = resp_code
+
+        return req, resp
+
+    def get_payload(self, method, url,
+                    audit_map=None, body=None, environ=None):
+        req, _ = self.build_api_call(method, url, body, environ)
+
+        return self.build_event(req, audit_map)
+
+    def check_event(self, request, response, event, action,
+                    target_type_uri,
+                    target_id=None,
+                    target_name=None,
+                    outcome="success"):
+        self.assertEqual(event['action'], action)
+        self.assertEqual(event['typeURI'],
+                         'http://schemas.dmtf.org/cloud/audit/1.0/event')
+        self.assertEqual(event['outcome'], outcome)
+        self.assertEqual(event['eventType'], 'activity')
+        self.assertEqual(event['target'].get('name'), target_name)
+        self.assertEqual(event['target'].get('id'), target_id or
+                         self.service_name)
+        self.assertEqual(event['target']['typeURI'], target_type_uri)
+        self.assertEqual(event['initiator']['id'], self.user_id)
+        self.assertEqual(event['initiator'].get('name'), self.username)
+        self.assertEqual(event['initiator']['project_id'], self.project_id)
+        self.assertEqual(event['initiator']['host']['address'],
+                         '192.168.0.1')
+        self.assertEqual(event['initiator']['typeURI'],
+                         'service/security/account/user')
+        # TODO: review current behaviour (why have an obfuscated token
+        # instead of a prefix)
+        self.assertNotEqual(event['initiator']['credential']['token'], 'token')
+        self.assertEqual(event['initiator']['credential']['identity_status'],
+                         'Confirmed')
+        # these fields are only available for finished requests
+        if outcome == 'pending':
+            self.assertNotIn('reason', event)
+            self.assertNotIn('reporterchain', event)
+        else:
+            self.assertEqual(event['reason']['reasonType'], 'HTTP')
+            self.assertEqual(event['reason']['reasonCode'],
+                             str(response.status_code))
+
+        # TODO check observer
+        self.assertEqual(event['requestPath'], request.path)
+
+    def build_url(self, res, host_url=None, prefix='', action=None,
+                  res_id=None,
+                  child_res=None, child_res_id=None):
+        url = host_url if host_url else 'http://admin_host:8774' + prefix
+        url += '/' + res
+        url += '/' + res_id if res_id else ''
+        url += '/' + child_res if child_res else ''
+        url += '/' + child_res_id if child_res_id else ''
+        url += '/' + action if action else ''
+
+        return url

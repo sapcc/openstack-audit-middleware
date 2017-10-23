@@ -75,7 +75,7 @@ class OpenStackAuditMiddleware(object):
                               str(err))
         except (OSError, yaml.YAMLError) as err:
             raise ConfigError('Error opening config file %s: %s',
-                              cfg_file, err)
+                              cfg_file, str(err))
 
     def _parse_resources(self, res_dict, parent_type_uri=None):
         result = {}
@@ -192,6 +192,9 @@ class OpenStackAuditMiddleware(object):
             event.target = resource.Resource(payload.get(
                 res_spec.id_field, res_parent_id),
                 res_spec.el_type_uri or res_spec.type_uri, name)
+        elif not rid and request.method == 'DELETE':
+            event.target = resource.Resource(res_parent_id,
+                                             res_spec.type_uri)
         return event
 
     def _get_action(self, res_spec, res_id, request, action_suffix):
