@@ -99,7 +99,8 @@ class AuditMiddleware(object):
         event = self._cadf_audit.create_event(request, response)
 
         if event:
-            self._notifier.notify(request.context, event.as_dict())
+            ctxt = {} # no additional context information needed
+            self._notifier.notify(ctxt, event.as_dict())
 
     @webob.dec.wsgify
     def __call__(self, req):
