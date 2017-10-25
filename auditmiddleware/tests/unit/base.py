@@ -81,7 +81,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             return cb(req)
 
         kwargs.setdefault('audit_map_file', self.audit_map)
-        kwargs.setdefault('service_name', 'pycadf')
+        kwargs.setdefault('service_name', 'nova')
 
         return auditmiddleware.AuditMiddleware(_do_cb, **kwargs)
 

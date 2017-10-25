@@ -12,8 +12,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         super(NovaAuditMappingTest, self).setUp()
 
         self.audit_map_file_fixture = "etc/nova_audit_map.yaml"
-        if not os.path.isfile(self.audit_map_file_fixture):
-            self.audit_map_file_fixture = '../../../etc/nova_audit_map.yaml'
+
         self.audit_map_file_fixture = os.path.realpath(
             self.audit_map_file_fixture)
 

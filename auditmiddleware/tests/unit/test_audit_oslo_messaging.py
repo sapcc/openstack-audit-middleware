@@ -11,11 +11,32 @@
 # under the License.
 
 import mock
+from oslo_messaging import MessagingException
 
 from auditmiddleware.tests.unit import base
+from oslo_messaging._drivers.impl_rabbit import Connection
 
 
 class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
+
+    def test_middleware_connect_fail(self):
+        transport_url = 'rabbit://me:passwd@host:5672/virtual_host'
+        self.cfg.config(driver='messaging',
+                        transport_url=transport_url,
+                        group='audit_middleware_notifications')
+        self.cfg.config(rabbit_max_retries=1,
+                        group='oslo_messaging_rabbit')
+
+        with mock.patch('oslo_messaging.notify.notifier.Notifier'
+                        '._notify',
+                        side_effect=MessagingException("test exception")) as\
+                driver:
+            app = self.create_simple_app()
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
+            # audit middleware conf has 'log' make sure that driver is invoked
+            # and not the one specified in DEFAULT section
+            self.assertTrue(driver.called)
 
     def test_conf_middleware_log_and_default_as_messaging(self):
         self.cfg.config(driver='log',

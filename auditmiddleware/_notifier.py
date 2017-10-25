@@ -11,10 +11,13 @@
 # under the License.
 
 import os
+import random
 import sys
 from Queue import Queue
 
 import time
+
+from oslo_config import cfg
 
 try:
     import oslo_messaging
@@ -37,30 +40,34 @@ class _MessagingNotifier(object):
     def __init__(self, notifier, log):
         self._log = log
         self._notifier = notifier
-        self.wait_until = time.time()
-        self.queue = Queue(10000)
+        self._seq_errors = 0
+        self._wait_until = time.time()
+        self._queue = Queue(10000)
 
     def __del__(self):
-        if not self.queue.empty():
+        if not self._queue.empty():
             self.flush_buffer()
 
     def notify(self, context, payload):
-        if time.time() < self.wait_until:
+        if time.time() < self._wait_until:
             self.enqueue_notification(payload, context)
             return
 
-        if self.queue.qsize() > 0:
+        if self._queue.qsize() > 0:
             self.flush_buffer()
 
         try:
             self._notifier.info(context, "audit.cadf", payload)
+            self._seq_errors = 0
         except Exception as err:
             self.enqueue_notification(payload, context)
-            self.wait_until = time.time() + 180
+            sleep = random.randrange(0, min(900, 60 * 2 ** self._seq_errors))
+            self._wait_until = time.time() + self.backoff_delay
+            self.seq_errors += 1
 
     def enqueue_notification(self, payload, context):
         try:
-            self.queue.put_nowait((payload, context))
+            self._queue.put_nowait((payload, context))
         except Queue.Full:
             self._log.warning("Audit events could not be delivered ("
                               "buffer full). Payload follows ...")
@@ -76,29 +83,34 @@ class _MessagingNotifier(object):
         self._log.info("Flushing %d messages from buffer")
         try:
             while True:
-                payload, context = self.queue.get_nowait()
+                payload, context = self._queue.get_nowait()
                 self._notifier.info(context, "audit.cadf", payload)
+                self._seq_errors = 0
         except Queue.Empty:
             # ignore
             pass
         except Exception as e:
-
-            while True:
-                self.log_event(context, payload)
-                payload, context = self.queue.get_nowait()
+            # flush to log
+            try:
+                while True:
+                    self.log_event(context, payload)
+                    payload, context = self._queue.get_nowait()
+            except Queue.Empty:
+                pass
 
 
 def create_notifier(conf, log):
     if oslo_messaging:
         transport = oslo_messaging.get_notification_transport(
             conf.oslo_conf_obj,
-            url=conf.get('transport_url'))
-
+            url=conf.get('transport_url'),)
         notifier = oslo_messaging.Notifier(
             transport,
             os.path.basename(sys.argv[0]),
             driver=conf.get('driver'),
-            topics=conf.get('topics'))
+            topics=conf.get('topics'),
+            retry=0)
+
 
         return _MessagingNotifier(notifier, log)
 
