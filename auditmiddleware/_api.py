@@ -16,7 +16,6 @@ import yaml
 from oslo_log import log as logging
 from pycadf import cadftaxonomy as taxonomy, endpoint
 from pycadf import cadftype
-from pycadf import credential
 from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason

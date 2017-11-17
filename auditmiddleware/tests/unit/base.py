@@ -161,11 +161,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                          '192.168.0.1')
         self.assertEqual(event['initiator']['typeURI'],
                          'service/security/account/user')
-        # TODO: review current behaviour (why have an obfuscated token
-        # instead of a prefix)
-        self.assertNotEqual(event['initiator']['credential']['token'], 'token')
-        self.assertEqual(event['initiator']['credential']['identity_status'],
-                         'Confirmed')
         # these fields are only available for finished requests
         if outcome == 'pending':
             self.assertNotIn('reason', event)

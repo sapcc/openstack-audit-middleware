@@ -23,7 +23,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         return self.audit_map_file_fixture
 
     def test_get_list(self):
-        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        url = self.build_url('servers', prefix='/compute/v2.1')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
