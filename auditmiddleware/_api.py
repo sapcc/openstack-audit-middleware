@@ -48,13 +48,6 @@ class ClientResource(resource.Resource):
             self.project_id = project_id
 
 
-class KeystoneCredential(credential.Credential):
-    def __init__(self, identity_status=None, **kwargs):
-        super(KeystoneCredential, self).__init__(**kwargs)
-        if identity_status is not None:
-            self.identity_status = identity_status
-
-
 class OpenStackAuditMiddleware(object):
     def __init__(self, cfg_file, log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
@@ -300,10 +293,6 @@ class OpenStackAuditMiddleware(object):
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
             host=host.Host(address=request.client_addr,
                            agent=request.user_agent),
-            credential=KeystoneCredential(
-                token=request.environ.get('HTTP_X_AUTH_TOKEN', ''),
-                identity_status=request.environ.get('HTTP_X_IDENTITY_STATUS',
-                                                    taxonomy.UNKNOWN)),
             project_id=project_or_domain_id)
 
         action_result = None
