@@ -1,6 +1,6 @@
 service_type: 'compute'
 service_name: 'nova'
-prefix: '/v2/{project_id}'
+prefix: '/compute/v2.1'
 
 resources:
     agents:
@@ -128,7 +128,7 @@ resources:
                 singleton: true
             tags:
             volume-attachments:
-                api_name: os-volument_attachments
+                api_name: os-volumen_attachments
     server-groups:
         api_name: os-server-groups
     services:
@@ -140,5 +140,4 @@ resources:
             force-down: update
     usage:
         api_name: os-simple-tenant-usage
-
 
