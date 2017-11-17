@@ -13,7 +13,7 @@
 import os
 import random
 import sys
-from Queue import Queue
+import Queue as queue
 
 import time
 
@@ -42,7 +42,7 @@ class _MessagingNotifier(object):
         self._notifier = notifier
         self._seq_errors = 0
         self._wait_until = time.time()
-        self._queue = Queue(10000)
+        self._queue = queue.Queue(10000)
 
     def __del__(self):
         if not self._queue.empty():
@@ -68,7 +68,7 @@ class _MessagingNotifier(object):
     def enqueue_notification(self, payload, context):
         try:
             self._queue.put_nowait((payload, context))
-        except Queue.Full:
+        except queue.Full:
             self._log.warning("Audit events could not be delivered ("
                               "buffer full). Payload follows ...")
             self.log_event(context, payload)
@@ -86,7 +86,7 @@ class _MessagingNotifier(object):
                 payload, context = self._queue.get_nowait()
                 self._notifier.info(context, "audit.cadf", payload)
                 self._seq_errors = 0
-        except Queue.Empty:
+        except queue.Empty:
             # ignore
             pass
         except Exception as e:
@@ -95,7 +95,7 @@ class _MessagingNotifier(object):
                 while True:
                     self.log_event(context, payload)
                     payload, context = self._queue.get_nowait()
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
 
