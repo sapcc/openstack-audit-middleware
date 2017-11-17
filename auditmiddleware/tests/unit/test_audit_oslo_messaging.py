@@ -14,7 +14,6 @@ import mock
 from oslo_messaging import MessagingException
 
 from auditmiddleware.tests.unit import base
-from oslo_messaging._drivers.impl_rabbit import Connection
 
 
 class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):

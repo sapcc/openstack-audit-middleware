@@ -10,14 +10,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import Queue as queue
 import os
 import random
 import sys
-import Queue as queue
-
 import time
-
-from oslo_config import cfg
 
 try:
     import oslo_messaging
@@ -41,7 +38,7 @@ class _MessagingNotifier(object):
         self._log = log
         self._notifier = notifier
         self._seq_errors = 0
-        self._wait_until = time.time()
+        self._wait_until = 0.0
         self._queue = queue.Queue(10000)
 
     def __del__(self):
@@ -49,7 +46,7 @@ class _MessagingNotifier(object):
             self.flush_buffer()
 
     def notify(self, context, payload):
-        if time.time() < self._wait_until:
+        if self._seq_errors > 0 and time.time() < self._wait_until:
             self.enqueue_notification(payload, context)
             return
 
@@ -59,10 +56,13 @@ class _MessagingNotifier(object):
         try:
             self._notifier.info(context, "audit.cadf", payload)
             self._seq_errors = 0
-        except Exception as err:
+        except Exception as e:
+            self._log.debug("Message queue is down: %s; queueing %d events in "
+                            "memory", repr(e), self._seq_errors)
             self.enqueue_notification(payload, context)
-            sleep = random.randrange(0, min(900, 60 * 2 ** self._seq_errors))
-            self._wait_until = time.time() + self.backoff_delay
+            max_wait = 30 * (2 ** self._seq_errors)
+            sleep = random.randrange(15, min(900, max_wait))  # nosec
+            self._wait_until = time.time() + sleep
             self.seq_errors += 1
 
     def enqueue_notification(self, payload, context):
@@ -90,6 +90,8 @@ class _MessagingNotifier(object):
             # ignore
             pass
         except Exception as e:
+            self._log.error("Cannot flush events to message queue: %s",
+                            repr(e))
             # flush to log
             try:
                 while True:
@@ -103,14 +105,14 @@ def create_notifier(conf, log):
     if oslo_messaging:
         transport = oslo_messaging.get_notification_transport(
             conf.oslo_conf_obj,
-            url=conf.get('transport_url'),)
+            url=conf.get('transport_url'))
         notifier = oslo_messaging.Notifier(
             transport,
             os.path.basename(sys.argv[0]),
             driver=conf.get('driver'),
             topics=conf.get('topics'),
             retry=0)
-
+        # retry=0 to disable oslo messaging's blocking retries
 
         return _MessagingNotifier(notifier, log)
 
