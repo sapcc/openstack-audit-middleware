@@ -48,6 +48,10 @@ _AUDIT_OPTS = [
                help='A URL representing messaging driver to use for '
                     'notification. If not specified, we fall back to the same '
                     'configuration used for RPC.'),
+    cfg.IntOpt('mem_queue_size',
+               help='Size of the in-memory queue that is used to buffer '
+                    'messages that have not yet been accepted by the '
+                    'transport'),
 ]
 CONF = cfg.CONF
 CONF.register_opts(_AUDIT_OPTS, group=AUDIT_MIDDLEWARE_GROUP)

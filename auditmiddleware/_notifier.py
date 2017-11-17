@@ -12,9 +12,8 @@
 
 import Queue as queue
 import os
-import random
 import sys
-import time
+from threading import Thread
 
 try:
     import oslo_messaging
@@ -33,37 +32,19 @@ class _LogNotifier(object):
                         'payload': payload})
 
 
-class _MessagingNotifier(object):
-    def __init__(self, notifier, log):
+class _MessagingNotifier(Thread):
+    def __init__(self, notifier, log, mem_queue_size):
+        super(_MessagingNotifier, self).__init__(
+            name='async auditmiddleware notifications')
         self._log = log
         self._notifier = notifier
-        self._seq_errors = 0
-        self._wait_until = 0.0
-        self._queue = queue.Queue(10000)
+        self._queue = queue.Queue(mem_queue_size)
 
     def __del__(self):
-        if not self._queue.empty():
-            self.flush_buffer()
+        self.flush_to_log()
 
     def notify(self, context, payload):
-        if self._seq_errors > 0 and time.time() < self._wait_until:
-            self.enqueue_notification(payload, context)
-            return
-
-        if self._queue.qsize() > 0:
-            self.flush_buffer()
-
-        try:
-            self._notifier.info(context, "audit.cadf", payload)
-            self._seq_errors = 0
-        except Exception as e:
-            self._log.debug("Message queue is down: %s; queueing %d events in "
-                            "memory", repr(e), self._seq_errors)
-            self.enqueue_notification(payload, context)
-            max_wait = 30 * (2 ** self._seq_errors)
-            sleep = random.randrange(15, min(900, max_wait))  # nosec
-            self._wait_until = time.time() + sleep
-            self.seq_errors += 1
+        self.enqueue_notification(payload, context)
 
     def enqueue_notification(self, payload, context):
         try:
@@ -71,7 +52,23 @@ class _MessagingNotifier(object):
         except queue.Full:
             self._log.warning("Audit events could not be delivered ("
                               "buffer full). Payload follows ...")
+            self.flush_to_log()
             self.log_event(context, payload)
+
+    def run(self):
+        while True:
+            try:
+                payload, context = self._queue.get()
+                self._notifier.info(context, "audit.cadf", payload)
+            except queue.Empty:
+                # ignore
+                pass
+            except Exception as e:
+                # switch to log output in case of errors
+                self._log.error("Cannot push audit events to message queue: "
+                                "%s", repr(e))
+                self.log_event(context, payload)
+                self.flush_to_log()
 
     def log_event(self, context, payload):
         self._log.info('Event type: audit.cadf, Context: %(context)s, '
@@ -79,26 +76,14 @@ class _MessagingNotifier(object):
                        {'context': context, 'event_type': 'audit.cadf',
                         'payload': payload})
 
-    def flush_buffer(self):
-        self._log.info("Flushing %d messages from buffer")
+    def flush_to_log(self):
+        # flush all queued messages to log, starting with context, payload
         try:
             while True:
                 payload, context = self._queue.get_nowait()
-                self._notifier.info(context, "audit.cadf", payload)
-                self._seq_errors = 0
+                self.log_event(context, payload)
         except queue.Empty:
-            # ignore
             pass
-        except Exception as e:
-            self._log.error("Cannot flush events to message queue: %s",
-                            repr(e))
-            # flush to log
-            try:
-                while True:
-                    self.log_event(context, payload)
-                    payload, context = self._queue.get_nowait()
-            except queue.Empty:
-                pass
 
 
 def create_notifier(conf, log):
@@ -110,11 +95,15 @@ def create_notifier(conf, log):
             transport,
             os.path.basename(sys.argv[0]),
             driver=conf.get('driver'),
-            topics=conf.get('topics'),
-            retry=0)
-        # retry=0 to disable oslo messaging's blocking retries
+            topics=conf.get('topics'))
 
-        return _MessagingNotifier(notifier, log)
+        mqs = conf.get('mem_queue_size')
+        if mqs is None:
+            mqs = 10000
+        notf = _MessagingNotifier(notifier, log, mqs)
+        notf.setDaemon(True)
+        notf.start()
+        return notf
 
     else:
         return _LogNotifier(log)
