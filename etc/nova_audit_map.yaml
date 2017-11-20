@@ -133,7 +133,7 @@ resources:
                 singleton: true
             tags:
             volume-attachments:
-                api_name: os-volumen_attachments
+                api_name: os-volume_attachments
     server-groups:
         api_name: os-server-groups
     services:
