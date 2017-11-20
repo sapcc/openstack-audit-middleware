@@ -12,6 +12,7 @@
 
 import collections
 import hashlib
+import socket
 import uuid
 
 import yaml
@@ -34,6 +35,13 @@ method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
                        'PATCH': taxonomy.ACTION_UPDATE, 'POST':
                            taxonomy.ACTION_CREATE,
                        'DELETE': taxonomy.ACTION_DELETE}
+
+
+def _make_uuid(s):
+    if s.isdigit():
+        return str(uuid.UUID(int=int(s)))
+    else:
+        return s
 
 
 class ConfigError(Exception):
@@ -316,7 +324,7 @@ class OpenStackAuditMiddleware(object):
                 rtype = res_spec.type_uri
             else:
                 rtype = res_spec.el_type_uri
-            target = resource.Resource(id=res_id, typeURI=rtype)
+            target = resource.Resource(id=_make_uuid(res_id), typeURI=rtype)
         else:
             # use the service as resource if element has been addressed
             target = self._build_target_service_resource(res_spec, request)
@@ -352,7 +360,7 @@ class OpenStackAuditMiddleware(object):
     def _build_service_id(name):
         md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
         ns = uuid.UUID(md5_hash.hexdigest())
-        return str(uuid.uuid5(ns, str(uuid.uuid4())))
+        return str(uuid.uuid5(ns, socket.getfqdn()))
 
     def _strip_url_prefix(self, request):
         """ Removes the prefix from the URL paths, e.g. '/V2/{project_id}/'

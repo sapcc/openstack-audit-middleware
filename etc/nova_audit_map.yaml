@@ -3,6 +3,7 @@ service_name: 'nova'
 prefix: '/compute/v2.1'
 
 resources:
+    # NOTE: proxy-kind API are ignored
     agents:
         api_name: os-agents
         custom_id: 'agent_id'
@@ -18,10 +19,12 @@ resources:
         singleton: true
         custom_actions:
             detail: read/list/details
+    # cells: omitted
     consoles:
         custom_id: 'console_id'
     flavors:
         custom_actions:
+            detail: read/list/details
             addTenantAccess: allow/tenant-access
             removeTenantAccess: deny/tenant-access
 
@@ -39,6 +42,8 @@ resources:
     migrations:
     hypervisors:
         api_name: os-hypervisors
+        custom_actions:
+            detail: read/list/details
         children:
             uptime:
                 singleton: true
