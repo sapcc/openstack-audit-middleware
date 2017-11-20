@@ -320,7 +320,7 @@ class OpenStackAuditMiddleware(object):
         target = None
         if res_id:
             rtype = None
-            if action == taxonomy.ACTION_LIST or res_spec.singleton:
+            if action.startswith(taxonomy.ACTION_LIST) or res_spec.singleton:
                 rtype = res_spec.type_uri
             else:
                 rtype = res_spec.el_type_uri
