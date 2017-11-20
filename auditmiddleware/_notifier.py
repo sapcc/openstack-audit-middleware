@@ -40,10 +40,6 @@ class _MessagingNotifier(Thread):
         self._notifier = notifier
         self._queue = queue.Queue(mem_queue_size)
 
-    def __del__(self):
-        self._log.info("shutting down auditmiddleware notifications thread")
-        self.flush_to_log()
-
     def notify(self, context, payload):
         self.enqueue_notification(payload, context)
 

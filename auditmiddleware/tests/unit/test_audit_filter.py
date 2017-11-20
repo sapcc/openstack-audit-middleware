@@ -21,6 +21,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
         super(AuditApiLogicTest, self).setUp()
         self.service_name = 'nova'
+        self.service_id = '16f7be69f0a44a9e825fbe22a5405d7b'
 
     def test_get_list(self):
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
@@ -28,7 +29,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "service/compute/servers")
+                         "service/compute/servers", self.service_id,
+                         self.service_name)
 
     def test_get_read(self):
         rid = str(uuid.uuid4().hex)
@@ -203,7 +205,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, "update/disable",
-                         "service/compute/os-services")
+                         "service/compute/os-services", self.service_id,
+                         self.service_name)
 
     def test_post_action_missing_payload(self):
         rid = str(uuid.uuid4().hex)
@@ -260,7 +263,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, "read/list/details",
-                         "service/compute/servers")
+                         "service/compute/servers", self.service_id,
+                         self.service_name)
 
         # TODO: fix and enable for Swift
         # def test_no_auth_token(self):

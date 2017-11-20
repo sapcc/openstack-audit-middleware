@@ -24,7 +24,6 @@ JSON = 'application/json'
 
 audit_map_content_nova = """
 service_type: 'compute'
-service_name: 'nova'
 prefix: '/v2/{project_id}'
 
 resources:
@@ -70,6 +69,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
         # service_name needs to be redefined by subclass
         self.service_name = None
+        self.service_id = None
         self.project_id = str(uuid.uuid4().hex)
         self.user_id = str(uuid.uuid4().hex)
         self.username = "test user " + str(user_counter)
@@ -94,7 +94,22 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,
-                       'HTTP_X_IDENTITY_STATUS': 'Confirmed'}
+                       'HTTP_X_IDENTITY_STATUS': 'Confirmed',
+                       'HTTP_X_SERVICE_CATALOG':
+                           '''[{"endpoints_links": [],
+                                "endpoints": [{"adminURL":
+                                               "http://admin_host:8774",
+                                               "region": "RegionOne",
+                                               "publicURL":
+                                               "http://public_host:8774",
+                                               "internalURL":
+                                               "http://internal_host:8774",
+                                               "id":
+                                               "16f7be69f0a44a9e825fbe22a5405d7b"}],
+                                "type": "compute",
+                                "name": "nova",
+                                "id": "16f7be69f0a44a9e825fbe22a5405d7b"}]''',
+                       }
         if req_type:
             env_headers['REQUEST_METHOD'] = req_type
         return env_headers
@@ -152,7 +167,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.assertEqual(event['eventType'], 'activity')
         self.assertEqual(event['target'].get('name'), target_name)
         self.assertEqual(event['target'].get('id'), target_id or
-                         self.service_name)
+                         self.service_id)
         self.assertEqual(event['target']['typeURI'], target_type_uri)
         self.assertEqual(event['initiator']['id'], self.user_id)
         self.assertEqual(event['initiator'].get('name'), self.username)

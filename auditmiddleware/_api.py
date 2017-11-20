@@ -11,9 +11,12 @@
 # under the License.
 
 import collections
+import hashlib
+import uuid
 
 import yaml
 from oslo_log import log as logging
+from oslo_serialization import jsonutils
 from pycadf import cadftaxonomy as taxonomy, endpoint
 from pycadf import cadftype
 from pycadf import eventfactory
@@ -43,8 +46,7 @@ class ConfigError(Exception):
 class ClientResource(resource.Resource):
     def __init__(self, project_id=None, **kwargs):
         super(ClientResource, self).__init__(**kwargs)
-        if project_id is not None:
-            self.project_id = project_id
+        self.project_id = project_id
 
 
 class OpenStackAuditMiddleware(object):
@@ -56,7 +58,8 @@ class OpenStackAuditMiddleware(object):
             conf = yaml.safe_load(open(cfg_file, 'r'))
 
             self._service_type = conf['service_type']
-            self._service_name = conf['service_name']
+            self._service_name = conf.get('service_name')
+            self._service_id = None
             self._prefix_template = conf['prefix']
             # default_target_endpoint_type = conf.get('target_endpoint_type')
             # self._service_endpoints = conf.get('service_endpoints', {})
@@ -339,11 +342,40 @@ class OpenStackAuditMiddleware(object):
     def _build_target_service_resource(self, res_spec, req):
         """Build target resource."""
         target_type_uri = 'service/' + res_spec.type_uri
+        id, name = self.get_service_info(req)
         target = resource.Resource(typeURI=target_type_uri,
-                                   id=self._service_name)
+                                   id=id, name=name)
         target.add_address(endpoint.Endpoint(req.path_url))
 
         return target
+
+    def get_service_info(self, req):
+        if self._service_id is None:
+            catalog = {}
+            try:
+                catalog = jsonutils.loads(
+                    req.environ['HTTP_X_SERVICE_CATALOG'])
+            except KeyError:
+                self._log.warning(
+                    'Unable to discover target information because '
+                    'service catalog is missing. Either the incoming '
+                    'request does not contain an auth token or auth '
+                    'token does not contain a service catalog. For '
+                    'the latter, please make sure the '
+                    '"include_service_catalog" property in '
+                    'auth_token middleware is set to "True"')
+                name = (self._service_name or self._service_type)
+                md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
+                ns = uuid.UUID(md5_hash.hexdigest())
+                self._service_id = str(uuid.uuid5(ns, str(uuid.uuid4())))
+
+            for endp in catalog:
+                if endp['type'] == self._service_type:
+                    self._service_id = endp['id']
+                    self._service_name = endp['name']
+                    break
+
+        return self._service_id, self._service_name
 
     def _strip_url_prefix(self, request):
         """ Removes the prefix from the URL paths, e.g. '/V2/{project_id}/'
