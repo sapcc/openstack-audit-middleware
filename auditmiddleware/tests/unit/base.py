@@ -24,6 +24,7 @@ JSON = 'application/json'
 
 audit_map_content_nova = """
 service_type: 'compute'
+service_name: 'nova'
 prefix: '/v2/{project_id}'
 
 resources:
@@ -69,7 +70,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
         # service_name needs to be redefined by subclass
         self.service_name = None
-        self.service_id = None
         self.project_id = str(uuid.uuid4().hex)
         self.user_id = str(uuid.uuid4().hex)
         self.username = "test user " + str(user_counter)
@@ -103,12 +103,9 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                                                "publicURL":
                                                "http://public_host:8774",
                                                "internalURL":
-                                               "http://internal_host:8774",
-                                               "id":
-                                               "16f7be69f0a44a9e825fbe22a5405d7b"}],
+                                               "http://internal_host:8774"}],
                                 "type": "compute",
-                                "name": "nova",
-                                "id": "16f7be69f0a44a9e825fbe22a5405d7b"}]''',
+                                "name": "nova"}]''',
                        }
         if req_type:
             env_headers['REQUEST_METHOD'] = req_type
@@ -166,8 +163,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.assertEqual(event['outcome'], outcome)
         self.assertEqual(event['eventType'], 'activity')
         self.assertEqual(event['target'].get('name'), target_name)
-        self.assertEqual(event['target'].get('id'), target_id or
-                         self.service_id)
+        if target_id:  # only check what is known
+            self.assertEqual(event['target'].get('id'), target_id)
         self.assertEqual(event['target']['typeURI'], target_type_uri)
         self.assertEqual(event['initiator']['id'], self.user_id)
         self.assertEqual(event['initiator'].get('name'), self.username)
