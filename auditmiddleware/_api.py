@@ -177,8 +177,6 @@ class OpenStackAuditMiddleware(object):
 
     def _create_crud_event(self, res_id, res_parent_id, res_spec, request,
                            response):
-        # singletons cannot have their own ID, so we take the parent's one
-        rid = res_parent_id if res_spec.singleton else res_id
 
         event = self._create_event(res_spec, res_id, res_parent_id,
                                    request, response, None)
