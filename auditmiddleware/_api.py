@@ -11,12 +11,14 @@
 # under the License.
 
 import collections
+import hashlib
+import socket
+import uuid
 
 import yaml
 from oslo_log import log as logging
 from pycadf import cadftaxonomy as taxonomy, endpoint
 from pycadf import cadftype
-from pycadf import credential
 from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
@@ -35,6 +37,13 @@ method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
                        'DELETE': taxonomy.ACTION_DELETE}
 
 
+def _make_uuid(s):
+    if s.isdigit():
+        return str(uuid.UUID(int=int(s)))
+    else:
+        return s
+
+
 class ConfigError(Exception):
     """Error raised when pyCADF fails to configure correctly."""
 
@@ -44,15 +53,7 @@ class ConfigError(Exception):
 class ClientResource(resource.Resource):
     def __init__(self, project_id=None, **kwargs):
         super(ClientResource, self).__init__(**kwargs)
-        if project_id is not None:
-            self.project_id = project_id
-
-
-class KeystoneCredential(credential.Credential):
-    def __init__(self, identity_status=None, **kwargs):
-        super(KeystoneCredential, self).__init__(**kwargs)
-        if identity_status is not None:
-            self.identity_status = identity_status
+        self.project_id = project_id
 
 
 class OpenStackAuditMiddleware(object):
@@ -64,7 +65,8 @@ class OpenStackAuditMiddleware(object):
             conf = yaml.safe_load(open(cfg_file, 'r'))
 
             self._service_type = conf['service_type']
-            self._service_name = conf['service_name']
+            self._service_name = conf.get('service_name', self._service_type)
+            self._service_id = self._build_service_id(self._service_name)
             self._prefix_template = conf['prefix']
             # default_target_endpoint_type = conf.get('target_endpoint_type')
             # self._service_endpoints = conf.get('service_endpoints', {})
@@ -126,8 +128,7 @@ class OpenStackAuditMiddleware(object):
         if cursor == -1:
             # end of path reached, create the event
             return self._create_crud_event(res_id, res_parent_id,
-                                           res_spec,
-                                           request, response)
+                                           res_spec, request, response)
 
         # Find next path segment (skip leading / with +1)
         next_pos = path.find('/', cursor + 1)
@@ -166,8 +167,7 @@ class OpenStackAuditMiddleware(object):
 
             if next_pos == -1:
                 # this must be an action
-                return self._create_event(res_spec,
-                                          res_id or res_parent_id,
+                return self._create_event(res_spec, res_id, res_parent_id,
                                           request, response, token)
 
         self._log.warning(
@@ -177,14 +177,13 @@ class OpenStackAuditMiddleware(object):
 
     def _create_crud_event(self, res_id, res_parent_id, res_spec, request,
                            response):
-        # singletons cannot have their own ID, so we take the parent's one
-        rid = res_parent_id if res_spec.singleton else res_id
 
-        event = self._create_event(res_spec, rid,
+        event = self._create_event(res_spec, res_id, res_parent_id,
                                    request, response, None)
         # on create, requests the ID is available only after the response
-        if not rid and response and response.has_body and \
-           response.content_type == "application/json":
+        if not res_id and event.action.startswith(taxonomy.ACTION_CREATE)\
+           and response and response.has_body \
+           and response.content_type == "application/json":
             payload = response.json
             name = payload.get('name')
             if name is None:
@@ -192,9 +191,7 @@ class OpenStackAuditMiddleware(object):
             event.target = resource.Resource(payload.get(
                 res_spec.id_field, res_parent_id),
                 res_spec.el_type_uri or res_spec.type_uri, name)
-        elif not rid and request.method == 'DELETE':
-            event.target = resource.Resource(res_parent_id,
-                                             res_spec.type_uri)
+
         return event
 
     def _get_action(self, res_spec, res_id, request, action_suffix):
@@ -284,7 +281,7 @@ class OpenStackAuditMiddleware(object):
         return self._build_event(self._resource_specs, None, None, request,
                                  response, path, 0)
 
-    def _create_event(self, res_spec, res_id, request, response,
+    def _create_event(self, res_spec, res_id, res_parent_id, request, response,
                       action_suffix):
         action = self._get_action(res_spec, res_id, request, action_suffix)
         if not action:
@@ -300,10 +297,6 @@ class OpenStackAuditMiddleware(object):
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
             host=host.Host(address=request.client_addr,
                            agent=request.user_agent),
-            credential=KeystoneCredential(
-                token=request.environ.get('HTTP_X_AUTH_TOKEN', ''),
-                identity_status=request.environ.get('HTTP_X_IDENTITY_STATUS',
-                                                    taxonomy.UNKNOWN)),
             project_id=project_or_domain_id)
 
         action_result = None
@@ -320,16 +313,18 @@ class OpenStackAuditMiddleware(object):
             action_result = taxonomy.UNKNOWN
 
         target = None
-        if res_id:
+        if res_id or res_parent_id:
             rtype = None
-            if action == taxonomy.ACTION_LIST or res_spec.singleton:
+            if not res_id:
                 rtype = res_spec.type_uri
             else:
                 rtype = res_spec.el_type_uri
-            target = resource.Resource(id=res_id, typeURI=rtype)
+            target = resource.Resource(id=_make_uuid(res_id or res_parent_id),
+                                       typeURI=rtype)
         else:
             # use the service as resource if element has been addressed
             target = self._build_target_service_resource(res_spec, request)
+
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
             outcome=action_result,
@@ -352,10 +347,17 @@ class OpenStackAuditMiddleware(object):
         """Build target resource."""
         target_type_uri = 'service/' + res_spec.type_uri
         target = resource.Resource(typeURI=target_type_uri,
-                                   id=self._service_name)
+                                   id=self._service_id,
+                                   name=self._service_name)
         target.add_address(endpoint.Endpoint(req.path_url))
 
         return target
+
+    @staticmethod
+    def _build_service_id(name):
+        md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
+        ns = uuid.UUID(md5_hash.hexdigest())
+        return str(uuid.uuid5(ns, socket.getfqdn()))
 
     def _strip_url_prefix(self, request):
         """ Removes the prefix from the URL paths, e.g. '/V2/{project_id}/'

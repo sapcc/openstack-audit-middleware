@@ -43,6 +43,8 @@ resources:
                   'GET:*': 'read/metadata/*'
                   'PUT:*': 'update/metadata/*'
                   'DELETE:*': 'delete/metadata/*'
+            volume-attachments:
+                api_name: os-volume_attachments
             tags:
     os-services:
         # all default
@@ -81,7 +83,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             return cb(req)
 
         kwargs.setdefault('audit_map_file', self.audit_map)
-        kwargs.setdefault('service_name', 'pycadf')
+        kwargs.setdefault('service_name', 'nova')
 
         return auditmiddleware.AuditMiddleware(_do_cb, **kwargs)
 
@@ -94,7 +96,19 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,
-                       'HTTP_X_IDENTITY_STATUS': 'Confirmed'}
+                       'HTTP_X_IDENTITY_STATUS': 'Confirmed',
+                       'HTTP_X_SERVICE_CATALOG':
+                           '''[{"endpoints_links": [],
+                                "endpoints": [{"adminURL":
+                                               "http://admin_host:8774",
+                                               "region": "RegionOne",
+                                               "publicURL":
+                                               "http://public_host:8774",
+                                               "internalURL":
+                                               "http://internal_host:8774"}],
+                                "type": "compute",
+                                "name": "nova"}]''',
+                       }
         if req_type:
             env_headers['REQUEST_METHOD'] = req_type
         return env_headers
@@ -151,8 +165,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.assertEqual(event['outcome'], outcome)
         self.assertEqual(event['eventType'], 'activity')
         self.assertEqual(event['target'].get('name'), target_name)
-        self.assertEqual(event['target'].get('id'), target_id or
-                         self.service_name)
+        if target_id:  # only check what is known
+            self.assertEqual(event['target'].get('id'), target_id)
         self.assertEqual(event['target']['typeURI'], target_type_uri)
         self.assertEqual(event['initiator']['id'], self.user_id)
         self.assertEqual(event['initiator'].get('name'), self.username)
@@ -161,11 +175,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                          '192.168.0.1')
         self.assertEqual(event['initiator']['typeURI'],
                          'service/security/account/user')
-        # TODO: review current behaviour (why have an obfuscated token
-        # instead of a prefix)
-        self.assertNotEqual(event['initiator']['credential']['token'], 'token')
-        self.assertEqual(event['initiator']['credential']['identity_status'],
-                         'Confirmed')
         # these fields are only available for finished requests
         if outcome == 'pending':
             self.assertNotIn('reason', event)
