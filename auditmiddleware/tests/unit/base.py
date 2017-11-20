@@ -43,6 +43,8 @@ resources:
                   'GET:*': 'read/metadata/*'
                   'PUT:*': 'update/metadata/*'
                   'DELETE:*': 'delete/metadata/*'
+            volume-attachments:
+                api_name: os-volume_attachments
             tags:
     os-services:
         # all default

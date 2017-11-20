@@ -128,8 +128,7 @@ class OpenStackAuditMiddleware(object):
         if cursor == -1:
             # end of path reached, create the event
             return self._create_crud_event(res_id, res_parent_id,
-                                           res_spec,
-                                           request, response)
+                                           res_spec, request, response)
 
         # Find next path segment (skip leading / with +1)
         next_pos = path.find('/', cursor + 1)
@@ -168,8 +167,7 @@ class OpenStackAuditMiddleware(object):
 
             if next_pos == -1:
                 # this must be an action
-                return self._create_event(res_spec,
-                                          res_id or res_parent_id,
+                return self._create_event(res_spec, res_id, res_parent_id,
                                           request, response, token)
 
         self._log.warning(
@@ -182,11 +180,12 @@ class OpenStackAuditMiddleware(object):
         # singletons cannot have their own ID, so we take the parent's one
         rid = res_parent_id if res_spec.singleton else res_id
 
-        event = self._create_event(res_spec, rid,
+        event = self._create_event(res_spec, res_id, res_parent_id,
                                    request, response, None)
         # on create, requests the ID is available only after the response
-        if not rid and response and response.has_body and \
-           response.content_type == "application/json":
+        if not res_id and event.action.startswith(taxonomy.ACTION_CREATE)\
+           and response and response.has_body \
+           and response.content_type == "application/json":
             payload = response.json
             name = payload.get('name')
             if name is None:
@@ -194,9 +193,7 @@ class OpenStackAuditMiddleware(object):
             event.target = resource.Resource(payload.get(
                 res_spec.id_field, res_parent_id),
                 res_spec.el_type_uri or res_spec.type_uri, name)
-        elif not rid and request.method == 'DELETE':
-            event.target = resource.Resource(res_parent_id,
-                                             res_spec.type_uri)
+
         return event
 
     def _get_action(self, res_spec, res_id, request, action_suffix):
@@ -286,7 +283,7 @@ class OpenStackAuditMiddleware(object):
         return self._build_event(self._resource_specs, None, None, request,
                                  response, path, 0)
 
-    def _create_event(self, res_spec, res_id, request, response,
+    def _create_event(self, res_spec, res_id, res_parent_id, request, response,
                       action_suffix):
         action = self._get_action(res_spec, res_id, request, action_suffix)
         if not action:
@@ -318,16 +315,18 @@ class OpenStackAuditMiddleware(object):
             action_result = taxonomy.UNKNOWN
 
         target = None
-        if res_id:
+        if res_id or res_parent_id:
             rtype = None
-            if action.startswith(taxonomy.ACTION_LIST) or res_spec.singleton:
+            if not res_id:
                 rtype = res_spec.type_uri
             else:
                 rtype = res_spec.el_type_uri
-            target = resource.Resource(id=_make_uuid(res_id), typeURI=rtype)
+            target = resource.Resource(id=_make_uuid(res_id or res_parent_id),
+                                       typeURI=rtype)
         else:
             # use the service as resource if element has been addressed
             target = self._build_target_service_resource(res_spec, request)
+
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
             outcome=action_result,

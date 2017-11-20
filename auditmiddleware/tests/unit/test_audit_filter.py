@@ -31,6 +31,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "service/compute/servers", None,
                          self.service_name)
 
+    def test_get_list_child(self):
+        rid = str(uuid.uuid4().hex)
+        # this property is modelled as custom action
+        key = "os-volume_attachments"
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid, child_res=key)
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_LIST,
+                         "compute/server/volume-attachments", rid)
+
     def test_get_read(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
