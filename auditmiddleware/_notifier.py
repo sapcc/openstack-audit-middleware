@@ -86,15 +86,15 @@ class _MessagingNotifier(Thread):
 def create_notifier(conf, log):
     if oslo_messaging:
         transport = oslo_messaging.get_notification_transport(
-            conf.oslo_conf_obj,
-            url=conf.get('transport_url'))
+            conf,
+            url=conf.audit_middleware_notifications.transport_url)
         notifier = oslo_messaging.Notifier(
             transport,
             os.path.basename(sys.argv[0]),
-            driver=conf.get('driver'),
-            topics=conf.get('topics'))
+            driver=conf.audit_middleware_notifications.driver,
+            topics=conf.audit_middleware_notifications.topics)
 
-        mqs = conf.get('mem_queue_size')
+        mqs = conf.audit_middleware_notifications.mem_queue_size
         if mqs is None:
             mqs = 10000
         notf = _MessagingNotifier(notifier, log, mqs)

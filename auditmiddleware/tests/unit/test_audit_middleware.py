@@ -11,8 +11,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import uuid
-
 import fixtures
 import mock
 import webob
@@ -133,15 +131,6 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         # ensure event is not the same across requests
         self.assertNotEqual(event1['id'],
                             self.notifier.notify.call_args_list[0][0][1]['id'])
-
-    def test_project_name_from_oslo_config(self):
-        self.assertEqual(self.PROJECT_NAME,
-                         self.create_simple_middleware()._conf.project)
-
-    def test_project_name_from_local_config(self):
-        project_name = uuid.uuid4().hex
-        middleware = self.create_simple_middleware(project=project_name)
-        self.assertEqual(project_name, middleware._conf.project)
 
     def test_no_response(self):
         middleware = self.create_simple_middleware()

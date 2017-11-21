@@ -23,7 +23,6 @@ import copy
 import functools
 
 import webob.dec
-from keystonemiddleware._common import config
 from oslo_config import cfg
 from oslo_context import context as oslo_context
 from oslo_log import log as logging
@@ -84,13 +83,10 @@ class AuditMiddleware(object):
 
     def __init__(self, app, **conf):
         self._application = app
-        self._conf = config.Config('cadfaudit',
-                                   AUDIT_MIDDLEWARE_GROUP,
-                                   _list_opts(),
-                                   conf)
+        self._conf = CONF
+
         global _LOG
         _LOG = logging.getLogger(conf.get('log_name', __name__))
-        self._service_name = conf.get('service_name')
         self._ignore_req_list = [x.upper().strip() for x in
                                  conf.get('ignore_req_list', '').split(',')]
         self._cadf_audit = _api.OpenStackAuditMiddleware(

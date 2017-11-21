@@ -54,8 +54,6 @@ user_counter = 0
 
 
 class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
-    PROJECT_NAME = 'auditmiddleware'
-
     def setUp(self):
         super(BaseAuditMiddlewareTest, self).setUp()
 
@@ -68,7 +66,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.cfg = self.useFixture(cfg_fixture.Config())
         self.msg = self.useFixture(msg_fixture.ConfFixture(self.cfg.conf))
 
-        self.cfg.conf([], project=self.PROJECT_NAME)
+        self.cfg.conf([])
 
         # service_name needs to be redefined by subclass
         self.service_name = None
@@ -83,7 +81,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             return cb(req)
 
         kwargs.setdefault('audit_map_file', self.audit_map)
-        kwargs.setdefault('service_name', 'nova')
 
         return auditmiddleware.AuditMiddleware(_do_cb, **kwargs)
 

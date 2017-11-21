@@ -6,8 +6,6 @@ from auditmiddleware.tests.unit import base
 
 
 class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
-    PROJECT_NAME = 'auditmiddleware'
-
     def setUp(self):
         super(NovaAuditMappingTest, self).setUp()
 
