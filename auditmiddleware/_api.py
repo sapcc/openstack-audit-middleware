@@ -182,7 +182,7 @@ class OpenStackAuditMiddleware(object):
                                    request, response, None)
         # on create, requests the ID is available only after the response
         if not res_id and event.action.startswith(taxonomy.ACTION_CREATE)\
-           and response and response.has_body \
+           and response and response.content_length > 0 \
            and response.content_type == "application/json":
             payload = response.json
             name = payload.get('name')
