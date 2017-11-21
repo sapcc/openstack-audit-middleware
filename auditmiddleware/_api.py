@@ -274,6 +274,8 @@ class OpenStackAuditMiddleware(object):
         # drop the endpoint's path prefix
         path = self._strip_url_prefix(request)
         if not path:
+            self._log.debug("ignoring request (wrong prefix): %s",
+                            request.path)
             return None
 
         path = path[:-1] if path.endswith('/') else path
