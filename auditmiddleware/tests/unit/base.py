@@ -25,7 +25,7 @@ JSON = 'application/json'
 audit_map_content_nova = """
 service_type: 'compute'
 service_name: 'nova'
-prefix: '/v2/{project_id}'
+prefix: '/v2/[0-9a-z-]*'
 
 resources:
     servers:

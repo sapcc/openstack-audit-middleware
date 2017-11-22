@@ -12,6 +12,7 @@
 
 import collections
 import hashlib
+import re
 import socket
 import uuid
 
@@ -67,7 +68,7 @@ class OpenStackAuditMiddleware(object):
             self._service_type = conf['service_type']
             self._service_name = conf.get('service_name', self._service_type)
             self._service_id = self._build_service_id(self._service_name)
-            self._prefix_template = conf['prefix']
+            self._prefix_re = re.compile(conf['prefix'])
             # default_target_endpoint_type = conf.get('target_endpoint_type')
             # self._service_endpoints = conf.get('service_endpoints', {})
             self._resource_specs = self._parse_resources(conf['resources'])
@@ -362,14 +363,10 @@ class OpenStackAuditMiddleware(object):
         return str(uuid.uuid5(ns, socket.getfqdn()))
 
     def _strip_url_prefix(self, request):
-        """ Removes the prefix from the URL paths, e.g. '/V2/{project_id}/'
+        """ Removes the prefix from the URL paths
         :param req: incoming request
         :return: URL request path without the leading prefix or None if prefix
         was missing
         """
-        project_or_domain_id = request.environ.get(
-            'HTTP_X_PROJECT_ID') or request.environ.get(
-            'HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN)
-        prefix = self._prefix_template.format(project_id=project_or_domain_id)
-        return request.path[len(prefix):] if request.path.startswith(prefix) \
-            else None
+        g = self._prefix_re.match(request.path)
+        return request.path[g.end():] if g else None

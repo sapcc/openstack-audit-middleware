@@ -105,7 +105,7 @@ Example (Nova)::
   # service type as configured in the OpenStack catalog
   service_type: compute
   # configure prefix 
-  prefix: '/v2/{project_id}'
+  prefix: '/v2[0-9\.]*/[0-9a-f\-]*'
    
   # describe resources exposed by the REST API
   # URL paths follow one of the following patterns:
