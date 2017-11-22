@@ -315,6 +315,7 @@ class OpenStackAuditMiddleware(object):
         else:
             action_result = taxonomy.UNKNOWN
 
+        observer = self._build_target_service_resource(res_spec, request)
         target = None
         if res_id or res_parent_id:
             rtype = None
@@ -326,14 +327,14 @@ class OpenStackAuditMiddleware(object):
                                        typeURI=rtype)
         else:
             # use the service as resource if element has been addressed
-            target = self._build_target_service_resource(res_spec, request)
+            target = observer
 
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
             outcome=action_result,
             action=action,
             initiator=initiator,
-            # TODO add observer again?
+            observer=observer,
             reason=event_reason,
             target=target)
         event.requestPath = request.path_qs
