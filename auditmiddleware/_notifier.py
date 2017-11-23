@@ -38,6 +38,7 @@ class _MessagingNotifier(Thread):
             name='async auditmiddleware notifications')
         self._log = log
         self._notifier = notifier
+        self._queue_capacity = mem_queue_size
         self._queue = queue.Queue(mem_queue_size)
 
     def notify(self, context, payload):
@@ -45,10 +46,23 @@ class _MessagingNotifier(Thread):
 
     def enqueue_notification(self, payload, context):
         try:
-            self._queue.put_nowait((payload, context))
+            self._queue.put((payload, context), timeout=1)
+            sz = self._queue.qsize()
+            u = sz * 100 / self._queue_capacity
+            if u % 10 == 0:
+                self._log.debug("backlog: queue size reached %d items ("
+                                "capacity: %d items", sz, self._queue_capacity)
+                if u >= 90:
+                    self._log.warn("backlog: queue size reached %d items ("
+                                   "capacity: %d items", sz,
+                                   self._queue_capacity)
+                elif u >= 50:
+                    self._log.info("backlog: queue size reached %d items ("
+                                   "capacity: %d items", sz,
+                                   self._queue_capacity)
         except queue.Full:
-            self._log.warning("Audit events could not be delivered ("
-                              "buffer full). Payload follows ...")
+            self._log.error("Audit events could not be delivered ("
+                            "buffer full). Payload follows ...")
             self.flush_to_log()
             self.log_event(context, payload)
 

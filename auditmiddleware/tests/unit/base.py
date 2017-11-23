@@ -165,6 +165,9 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         if target_id:  # only check what is known
             self.assertEqual(event['target'].get('id'), target_id)
         self.assertEqual(event['target']['typeURI'], target_type_uri)
+        self.assertIsNotNone(event['observer']['id'])
+        self.assertEqual(event['observer'].get('name'), self.service_name)
+
         self.assertEqual(event['initiator']['id'], self.user_id)
         self.assertEqual(event['initiator'].get('name'), self.username)
         self.assertEqual(event['initiator']['project_id'], self.project_id)

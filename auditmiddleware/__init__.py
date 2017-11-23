@@ -93,6 +93,7 @@ class AuditMiddleware(object):
             conf.get('audit_map_file'),
             _LOG)
         self._notifier = _notifier.create_notifier(self._conf, _LOG)
+        _LOG.debug("audit middleware config: %s", conf)
 
     @_log_and_ignore_error
     def _process_request(self, request, response=None):
