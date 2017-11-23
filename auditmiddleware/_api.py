@@ -268,7 +268,8 @@ class OpenStackAuditMiddleware(object):
             return (self._map_method_to_action(method, res_id) + "/" +
                     rest_action)
         else:
-            self._log.debug("action %s is filtered out", rest_action)
+            self._log.debug("action %s is filtered out (%s)", rest_action,
+                            request.path)
             return None
 
     def create_event(self, request, response=None):
