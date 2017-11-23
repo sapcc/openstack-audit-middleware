@@ -49,7 +49,7 @@ class _MessagingNotifier(Thread):
             self._queue.put((payload, context), timeout=1)
             sz = self._queue.qsize()
             u = sz * 100 / self._queue_capacity
-            if u % 10 == 0:
+            if u >= 10 and u % 10 == 0:
                 self._log.debug("backlog: queue size reached %d items ("
                                 "capacity: %d items", sz, self._queue_capacity)
                 if u >= 90:
