@@ -74,7 +74,7 @@ class _MessagingNotifier(Thread):
             except queue.Empty:
                 # ignore
                 pass
-            except:
+            except:  # noqa
                 # switch to log output in case of errors
                 self._log.error("Cannot push audit events to message queue: "
                                 "%s", str(sys.exc_info()[0]))
