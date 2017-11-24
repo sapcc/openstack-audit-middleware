@@ -73,6 +73,23 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_DELETE,
                          "compute/server", rid)
 
+    #  /v2/a759dcc2a2384a76b0386bb985952373/servers/805780cd-9934-42bd-a0b3-6db177a656b5/os-volume_attachments/e733127c-4bae-429c-bd01-a89ff0b109a2
+    def test_delete_child(self):
+        """ verify fix for
+        https://github.com/sapcc/openstack-audit-middleware/issues/8
+        """
+        rid = str(uuid.uuid4().hex)
+        rid2 = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid,
+                             child_res='os-volume_attachments',
+                             child_res_id=rid2)
+        request, response = self.build_api_call('DELETE', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_DELETE,
+                         "compute/server/volume-attachment", rid2)
+
     def test_delete_all(self):
         """ delete all child-resources at once, i.e. delete w/o child ID
         :return:

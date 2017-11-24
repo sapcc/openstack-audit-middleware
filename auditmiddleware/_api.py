@@ -37,6 +37,9 @@ method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
                            taxonomy.ACTION_CREATE,
                        'DELETE': taxonomy.ACTION_DELETE}
 
+# matcher for UUIDs
+_UUID_RE = re.compile("[0-9a-f\-]+$")
+
 
 def _make_uuid(s):
     if s.isdigit():
@@ -160,8 +163,7 @@ class OpenStackAuditMiddleware(object):
                     return self._build_event(child_res, None,
                                              res_id or res_parent_id, request,
                                              response, path, next_pos)
-            elif res_spec.custom_actions and token not in \
-                    res_spec.custom_actions:
+            elif _UUID_RE.match(token):
                 # next up should be an ID (unless it is a known action)
                 return self._build_event(res_spec, token, res_parent_id,
                                          request, response, path, next_pos)
