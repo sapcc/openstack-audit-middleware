@@ -51,14 +51,15 @@ class _MessagingNotifier(Thread):
             u = sz * 100 / self._queue_capacity
             if u >= 10 and u % 10 == 0:
                 self._log.debug("backlog: queue size reached %d items ("
-                                "capacity: %d items", sz, self._queue_capacity)
+                                "capacity: %d items)", sz,
+                                self._queue_capacity)
                 if u >= 90:
                     self._log.warn("backlog: queue size reached %d items ("
-                                   "capacity: %d items", sz,
+                                   "capacity: %d items)", sz,
                                    self._queue_capacity)
                 elif u >= 50:
                     self._log.info("backlog: queue size reached %d items ("
-                                   "capacity: %d items", sz,
+                                   "capacity: %d items)", sz,
                                    self._queue_capacity)
         except queue.Full:
             self._log.error("Audit events could not be delivered ("
