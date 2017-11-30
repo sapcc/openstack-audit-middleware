@@ -111,10 +111,14 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         return env_headers
 
     def build_event(self, req, resp=None, middleware_cfg=None):
+        ev = self.build_event_list(req, resp, middleware_cfg)
+        return ev[0] if ev else None
+
+    def build_event_list(self, req, resp=None, middleware_cfg=None):
         cfg = middleware_cfg or self.audit_map
         middleware = auditmiddleware._api.OpenStackAuditMiddleware(cfg)
-        event = middleware.create_event(req, resp)
-        return event.as_dict() if event else None
+        events = middleware.create_events(req, resp)
+        return [e.as_dict() for e in events] if events else None
 
     def build_api_call(self, method, url, req_json=None,
                        resp_json=None, resp_code=0,
@@ -149,7 +153,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                     audit_map=None, body=None, environ=None):
         req, _ = self.build_api_call(method, url, body, environ)
 
-        return self.build_event(req, audit_map)
+        return self.build_event(req, audit_map)[0]
 
     def check_event(self, request, response, event, action,
                     target_type_uri,

@@ -73,7 +73,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_DELETE,
                          "compute/server", rid)
 
-    #  /v2/a759dcc2a2384a76b0386bb985952373/servers/805780cd-9934-42bd-a0b3-6db177a656b5/os-volume_attachments/e733127c-4bae-429c-bd01-a89ff0b109a2
+    #  /v2/a759dcc2a2384a76b0386bb985952373/servers/805780cd-9934-42bd-a0b3
+    # -6db177a656b5/os-volume_attachments/e733127c-4bae-429c-bd01-a89ff0b109a2
     def test_delete_child(self):
         """ verify fix for
         https://github.com/sapcc/openstack-audit-middleware/issues/8
@@ -187,13 +188,41 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_post_create(self):
         rid = str(uuid.uuid4().hex)
+        rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         request, response = self.build_api_call('POST', url, resp_json={
-            'id': rid})
+            'id': rid, 'displayName': rname})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "compute/server", rid)
+                         "compute/server", rid, rname)
+
+    def test_post_create_neutron_style(self):
+        rid = str(uuid.uuid4().hex)
+        rname = 'server1'
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        request, response = self.build_api_call('POST', url, resp_json={
+            'server': {'id': rid, 'name': rname}})
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/server", rid, rname)
+
+    def test_post_create_multiple(self):
+        items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i)} for
+                 i in range(3)]
+
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        # Note: this batch create call is made up. it does not exist in nova
+        request, response = self.build_api_call('POST', url, resp_json={
+            "servers": items})
+
+        events = self.build_event_list(request, response)
+
+        for idx, event in enumerate(events):
+            self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                             "compute/server",
+                             items[idx]['id'], items[idx]['name'])
 
     def test_post_create_child(self):
         rid = str(uuid.uuid4().hex)
