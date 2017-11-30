@@ -11,6 +11,7 @@
 # under the License.
 
 import collections
+import copy
 import hashlib
 import re
 import socket
@@ -26,7 +27,8 @@ from pycadf import reason
 from pycadf import resource
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
-                                      ['type_uri', 'el_type_uri', 'singleton',
+                                      ['type_name', 'el_type_name',
+                                       'type_uri', 'el_type_uri', 'singleton',
                                        'id_field', 'custom_actions',
                                        'children'])
 
@@ -74,7 +76,7 @@ class OpenStackAuditMiddleware(object):
             self._prefix_re = re.compile(conf['prefix'])
             # default_target_endpoint_type = conf.get('target_endpoint_type')
             # self._service_endpoints = conf.get('service_endpoints', {})
-            self._resource_specs = self._parse_resources(conf['resources'])
+            self._resource_specs = self._build_audit_map(conf['resources'])
 
         except KeyError as err:
             raise ConfigError('Missing config property in %s: %s', cfg_file,
@@ -83,7 +85,7 @@ class OpenStackAuditMiddleware(object):
             raise ConfigError('Error opening config file %s: %s',
                               cfg_file, str(err))
 
-    def _parse_resources(self, res_dict, parent_type_uri=None):
+    def _build_audit_map(self, res_dict, parent_type_uri=None):
         result = {}
 
         for name, s in res_dict.iteritems():
@@ -99,40 +101,56 @@ class OpenStackAuditMiddleware(object):
 
             rest_name = spec.get('api_name', name)
             singleton = spec.get('singleton', False)
+            type_name = name
             type_uri = spec.get('type_uri', pfx + "/" + name)
+            el_type_name = None
             el_type_uri = None
             childs_parent_type_uri = None
             if not singleton:
+                el_type_name = type_name[:-1]
                 el_type_uri = type_uri[:-1]
                 childs_parent_type_uri = el_type_uri
             else:
                 childs_parent_type_uri = type_uri
 
-            spec = ResourceSpec(type_uri, el_type_uri,
-                                singleton,
+            spec = ResourceSpec(type_name, el_type_name,
+                                type_uri, el_type_uri, singleton,
                                 spec.get('custom_id', 'id'),
                                 spec.get('custom_actions', {}),
-                                self._parse_resources(spec.get('children', {}),
+                                self._build_audit_map(spec.get('children', {}),
                                                       childs_parent_type_uri))
             result[rest_name] = spec
 
         return result
 
-    def _build_event(self, res_spec, res_id, res_parent_id, request, response,
-                     path, cursor=0):
-        """ Parse a resource item
+    def create_events(self, request, response=None):
+        # drop the endpoint's path prefix
+        path = self._strip_url_prefix(request)
+        if not path:
+            self._log.info("ignoring request with path: %s",
+                           request.path)
+            return None
+
+        path = path[:-1] if path.endswith('/') else path
+        path = path[:-5] if path.endswith('.json') else path
+        return self._build_events(self._resource_specs, None, None, request,
+                                  response, path, 0)
+
+    def _build_events(self, res_spec, res_id, res_parent_id, request, response,
+                      path, cursor=0):
+        """ Parse a resource request recursively and build CADF events from it
 
         :param res_tree:
         :param path:
         :param cursor:
-        :return: the event
+        :return: an array of built events
         """
 
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
             # end of path reached, create the event
-            return self._create_crud_event(res_id, res_parent_id,
-                                           res_spec, request, response)
+            return self._create_cadf_events(res_id, res_parent_id,
+                                            res_spec, request, response)
 
         # Find next path segment (skip leading / with +1)
         next_pos = path.find('/', cursor + 1)
@@ -151,8 +169,8 @@ class OpenStackAuditMiddleware(object):
                 # no such name, ignore/filter the resource
                 return None
 
-            return self._build_event(res_spec, None, None, request, response,
-                                     path, next_pos)
+            return self._build_events(res_spec, None, None, request, response,
+                                      path, next_pos)
         elif isinstance(res_spec, ResourceSpec):
             # if the ID is set or it is a singleton
             # next up is an action or child
@@ -160,42 +178,140 @@ class OpenStackAuditMiddleware(object):
                 child_res = res_spec.children.get(token)
                 if child_res:
                     # the ID is still the one of the parent
-                    return self._build_event(child_res, None,
-                                             res_id or res_parent_id, request,
-                                             response, path, next_pos)
+                    return self._build_events(child_res, None,
+                                              res_id or res_parent_id, request,
+                                              response, path, next_pos)
             elif _UUID_RE.match(token):
                 # next up should be an ID (unless it is a known action)
-                return self._build_event(res_spec, token, res_parent_id,
-                                         request, response, path, next_pos)
+                return self._build_events(res_spec, token, res_parent_id,
+                                          request, response, path, next_pos)
 
             if next_pos == -1:
                 # this must be an action
-                return self._create_event(res_spec, res_id, res_parent_id,
-                                          request, response, token)
+                ev = self._create_cadf_event(res_spec, res_id,
+                                             res_parent_id,
+                                             request, response, token)
+                return [ev] if ev else None
 
         self._log.warning(
             "Unexpected continuation of resource path after segment %s: %s",
             token, request.path)
         return None
 
-    def _create_crud_event(self, res_id, res_parent_id, res_spec, request,
-                           response):
+    def _create_cadf_events(self, res_id, res_parent_id, res_spec, request,
+                            response):
 
-        event = self._create_event(res_spec, res_id, res_parent_id,
-                                   request, response, None)
+        event = self._create_cadf_event(res_spec, res_id, res_parent_id,
+                                        request, response, None)
         # on create, requests the ID is available only after the response
-        if not res_id and event.action.startswith(taxonomy.ACTION_CREATE)\
-           and response and response.content_length > 0 \
-           and response.content_type == "application/json":
+        if not res_id and event.action.startswith(taxonomy.ACTION_CREATE) \
+                and response and response.content_length > 0 \
+                and response.content_type == "application/json":
             payload = response.json
-            name = payload.get('name')
-            if name is None:
-                name = payload.get('displayName')
-            event.target = resource.Resource(payload.get(
-                res_spec.id_field, res_parent_id),
-                res_spec.el_type_uri or res_spec.type_uri, name)
+
+            # check for bulk-operation
+            if not res_spec.singleton and res_spec.type_name in payload:
+                # payload contains an attribute named like the resource
+                # which contains a list of items
+                events = []
+                for subpayload in payload[res_spec.type_name]:
+                    ev = copy.copy(event)
+                    ev.target = self._create_target_resource(res_spec,
+                                                             res_parent_id,
+                                                             subpayload)
+                    events.append(ev)
+
+                return events
+
+            # remove possible wrapper elements
+            payload = payload.get(res_spec.el_type_name, payload)
+
+            event.target = self._create_target_resource(res_spec,
+                                                        res_parent_id,
+                                                        payload)
+
+        return [event]
+
+    def _create_cadf_event(self, res_spec, res_id, res_parent_id, request,
+                           response, action_suffix):
+        action = self._get_action(res_spec, res_id, request, action_suffix)
+        if not action:
+            # skip if action filtered out
+            return
+
+        project_or_domain_id = request.environ.get(
+            'HTTP_X_PROJECT_ID') or request.environ.get(
+            'HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN)
+        initiator = ClientResource(
+            typeURI=taxonomy.ACCOUNT_USER,
+            id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
+            name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
+            host=host.Host(address=request.client_addr,
+                           agent=request.user_agent),
+            project_id=project_or_domain_id)
+
+        action_result = None
+        event_reason = None
+        if response:
+            if 200 <= response.status_int < 400:
+                action_result = taxonomy.OUTCOME_SUCCESS
+            else:
+                action_result = taxonomy.OUTCOME_FAILURE
+
+            event_reason = reason.Reason(
+                reasonType='HTTP', reasonCode=str(response.status_int))
+        else:
+            action_result = taxonomy.UNKNOWN
+
+        observer = self._create_target_service_resource(res_spec, request)
+        target = None
+        if res_id or res_parent_id:
+            rtype = None
+            if not res_id:
+                rtype = res_spec.type_uri
+            else:
+                rtype = res_spec.el_type_uri
+            target = resource.Resource(id=_make_uuid(res_id or res_parent_id),
+                                       typeURI=rtype)
+        else:
+            # use the service as resource if element has been addressed
+            target = observer
+
+        event = eventfactory.EventFactory().new_event(
+            eventType=cadftype.EVENTTYPE_ACTIVITY,
+            outcome=action_result,
+            action=action,
+            initiator=initiator,
+            observer=observer,
+            reason=event_reason,
+            target=target)
+        event.requestPath = request.path_qs
+        # TODO add reporter step again?
+        # event.add_reporterstep(
+        #    reporterstep.Reporterstep(
+        #        role=cadftype.REPORTER_ROLE_MODIFIER,
+        #        reporter=resource.Resource(id='observer'),
+        #        reporterTime=timestamp.get_utc_now()))
 
         return event
+
+    def _create_target_resource(self, res_spec, res_parent_id, payload):
+        name = payload.get('name')
+        if name is None:
+            name = payload.get('displayName')
+        return resource.Resource(payload.get(res_spec.id_field, res_parent_id),
+                                 res_spec.el_type_uri or res_spec.type_uri,
+                                 name)
+
+    def _create_target_service_resource(self, res_spec, req):
+        """Build target resource."""
+        target_type_uri = 'service/' + res_spec.type_uri
+        target = resource.Resource(typeURI=target_type_uri,
+                                   id=self._service_id,
+                                   name=self._service_name)
+        target.add_address(endpoint.Endpoint(req.path_url))
+
+        return target
 
     def _get_action(self, res_spec, res_id, request, action_suffix):
         """Given a resource spec, a request and a path suffix, deduct
@@ -273,92 +389,6 @@ class OpenStackAuditMiddleware(object):
             self._log.debug("action %s is filtered out (%s)", rest_action,
                             request.path)
             return None
-
-    def create_event(self, request, response=None):
-        # drop the endpoint's path prefix
-        path = self._strip_url_prefix(request)
-        if not path:
-            self._log.info("ignoring request with path: %s",
-                           request.path)
-            return None
-
-        path = path[:-1] if path.endswith('/') else path
-        path = path[:-5] if path.endswith('.json') else path
-        return self._build_event(self._resource_specs, None, None, request,
-                                 response, path, 0)
-
-    def _create_event(self, res_spec, res_id, res_parent_id, request, response,
-                      action_suffix):
-        action = self._get_action(res_spec, res_id, request, action_suffix)
-        if not action:
-            # skip if action filtered out
-            return
-
-        project_or_domain_id = request.environ.get(
-            'HTTP_X_PROJECT_ID') or request.environ.get(
-            'HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN)
-        initiator = ClientResource(
-            typeURI=taxonomy.ACCOUNT_USER,
-            id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
-            name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
-            host=host.Host(address=request.client_addr,
-                           agent=request.user_agent),
-            project_id=project_or_domain_id)
-
-        action_result = None
-        event_reason = None
-        if response:
-            if 200 <= response.status_int < 400:
-                action_result = taxonomy.OUTCOME_SUCCESS
-            else:
-                action_result = taxonomy.OUTCOME_FAILURE
-
-            event_reason = reason.Reason(
-                reasonType='HTTP', reasonCode=str(response.status_int))
-        else:
-            action_result = taxonomy.UNKNOWN
-
-        observer = self._build_target_service_resource(res_spec, request)
-        target = None
-        if res_id or res_parent_id:
-            rtype = None
-            if not res_id:
-                rtype = res_spec.type_uri
-            else:
-                rtype = res_spec.el_type_uri
-            target = resource.Resource(id=_make_uuid(res_id or res_parent_id),
-                                       typeURI=rtype)
-        else:
-            # use the service as resource if element has been addressed
-            target = observer
-
-        event = eventfactory.EventFactory().new_event(
-            eventType=cadftype.EVENTTYPE_ACTIVITY,
-            outcome=action_result,
-            action=action,
-            initiator=initiator,
-            observer=observer,
-            reason=event_reason,
-            target=target)
-        event.requestPath = request.path_qs
-        # TODO add reporter step again?
-        # event.add_reporterstep(
-        #    reporterstep.Reporterstep(
-        #        role=cadftype.REPORTER_ROLE_MODIFIER,
-        #        reporter=resource.Resource(id='observer'),
-        #        reporterTime=timestamp.get_utc_now()))
-
-        return event
-
-    def _build_target_service_resource(self, res_spec, req):
-        """Build target resource."""
-        target_type_uri = 'service/' + res_spec.type_uri
-        target = resource.Resource(typeURI=target_type_uri,
-                                   id=self._service_id,
-                                   name=self._service_name)
-        target.add_address(endpoint.Endpoint(req.path_url))
-
-        return target
 
     @staticmethod
     def _build_service_id(name):
