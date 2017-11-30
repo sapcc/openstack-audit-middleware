@@ -40,19 +40,19 @@ resources:
         type_uri: network/firewalls
       firewall_policies:
         type_uri: network/firewall/policies
-        el_type_uri: network/filewall/policy
+        el_type_uri: network/firewall/policy
       firewall_rules:
-        type_uri: network/filewall/rules
+        type_uri: network/firewall/rules
   fwaas:
     # FWaas 2.0 namespace (uses same logical resource uris as 1.0)
     singleton: true
     type_uri: network/firewalls
     children:
-      filewall_groups:
+      firewall_groups:
         type_uri: network/firewalls
       firewall_policies:
         type_uri: network/firewall/policies
-        el_type_uri: network/filewall/policy
+        el_type_uri: network/firewall/policy
       firewall_rules:
         type_uri: network/firewall/rules
 

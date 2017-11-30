@@ -53,7 +53,7 @@ resources:
       singleton: true
       children:
         someresources:
-          type_uri: compute/someresources 
+          type_uri: compute/someresources
 """
 
 user_counter = 0

@@ -30,6 +30,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "service/compute/servers",
                          None, self.service_name)
 
+
 class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
         super(NeutronAuditMappingTest, self).setUp()
@@ -66,6 +67,8 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "network/network", rid, rname)
 
     def test_post_create_namespaced(self):
+        """ tests the use of singleton resources for namespace prefixes
+        """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('fwaas', prefix='/v2.0',
                              child_res="firewall_groups")
@@ -76,7 +79,10 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "network/firewall", target_id=rid)
 
-    def test_post_create_namespaced(self):
+    def test_post_create_merged_namespaced(self):
+        """ check whether to namespace-like resources can be mapped to the
+        same type URI
+        """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('fw', prefix='/v2.0',
                              child_res="firewalls")
@@ -123,4 +129,3 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "network/network",
                              items[idx]['id'], items[idx]['name'])
-
