@@ -97,12 +97,13 @@ class AuditMiddleware(object):
 
     @_log_and_ignore_error
     def _process_request(self, request, response=None):
-        event = self._cadf_audit.create_event(request, response)
+        events = self._cadf_audit.create_events(request, response)
 
-        if event:
+        if events:
             # currently there is nothing useful in the context
             context = {}
-            self._notifier.notify(context, event.as_dict())
+            for e in events:
+                self._notifier.notify(context, e.as_dict())
 
     @webob.dec.wsgify
     def __call__(self, req):
