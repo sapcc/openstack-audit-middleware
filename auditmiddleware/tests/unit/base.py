@@ -48,6 +48,12 @@ resources:
             tags:
     os-services:
         # all default
+    # pseudo resource representing a namespace
+    mynamespace:
+      singleton: true
+      children:
+        someresources:
+          type_uri: compute/someresources 
 """
 
 user_counter = 0
