@@ -197,33 +197,6 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
 
-    def test_post_create_neutron_style(self):
-        rid = str(uuid.uuid4().hex)
-        rname = 'server1'
-        url = self.build_url('servers', prefix='/v2/' + self.project_id)
-        request, response = self.build_api_call('POST', url, resp_json={
-            'server': {'id': rid, 'name': rname}})
-        event = self.build_event(request, response)
-
-        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "compute/server", rid, rname)
-
-    def test_post_create_multiple(self):
-        items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i)} for
-                 i in range(3)]
-
-        url = self.build_url('servers', prefix='/v2/' + self.project_id)
-        # Note: this batch create call is made up. it does not exist in nova
-        request, response = self.build_api_call('POST', url, resp_json={
-            "servers": items})
-
-        events = self.build_event_list(request, response)
-
-        for idx, event in enumerate(events):
-            self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                             "compute/server",
-                             items[idx]['id'], items[idx]['name'])
-
     def test_post_create_child(self):
         rid = str(uuid.uuid4().hex)
         child_rid = str(uuid.uuid4().hex)
@@ -235,38 +208,6 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server/interface", target_id=child_rid)
-
-    def test_post_create_namespaced(self):
-        rid = str(uuid.uuid4().hex)
-        url = self.build_url('mynamespace', prefix='/v2/' + self.project_id,
-                             child_res="someresources")
-        request, response = self.build_api_call('POST', url,
-                                                resp_json={'id': rid})
-        event = self.build_event(request, response)
-
-        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "compute/someresource", target_id=rid)
-
-    def test_get_namespaced(self):
-        rid = str(uuid.uuid4().hex)
-        url = self.build_url('mynamespace', prefix='/v2/' + self.project_id,
-                             child_res="someresources", child_res_id=rid)
-        request, response = self.build_api_call('GET', url,
-                                                resp_json={'id': rid})
-        event = self.build_event(request, response)
-
-        self.check_event(request, response, event, taxonomy.ACTION_READ,
-                         "compute/someresource", target_id=rid)
-
-    def test_list_namespaced(self):
-        url = self.build_url('mynamespace', prefix='/v2/' + self.project_id,
-                             child_res="someresources")
-        request, response = self.build_api_call('GET', url)
-        event = self.build_event(request, response)
-
-        self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "service/compute/someresources", None,
-                         self.service_name)
 
     def test_post_action(self):
         rid = str(uuid.uuid4().hex)
