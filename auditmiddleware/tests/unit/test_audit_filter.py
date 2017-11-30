@@ -236,6 +236,38 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server/interface", target_id=child_rid)
 
+    def test_post_create_namespaced(self):
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('mynamespace', prefix='/v2/' + self.project_id,
+                             child_res="someresources")
+        request, response = self.build_api_call('POST', url,
+                                                resp_json={'id': rid})
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/someresource", target_id=rid)
+
+    def test_get_namespaced(self):
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('mynamespace', prefix='/v2/' + self.project_id,
+                             child_res="someresources", child_res_id=rid)
+        request, response = self.build_api_call('GET', url,
+                                                resp_json={'id': rid})
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "compute/someresource", target_id=rid)
+
+    def test_list_namespaced(self):
+        url = self.build_url('mynamespace', prefix='/v2/' + self.project_id,
+                             child_res="someresources")
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_LIST,
+                         "service/compute/someresources", None,
+                         self.service_name)
+
     def test_post_action(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
