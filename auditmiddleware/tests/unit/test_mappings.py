@@ -16,6 +16,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
             self.audit_map_file_fixture)
 
         self.service_name = 'nova'
+        self.service_type = 'compute'
 
     @property
     def audit_map(self):
@@ -27,7 +28,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "service/compute/servers",
+                         "compute/servers",
                          None, self.service_name)
 
 
@@ -41,6 +42,7 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
             self.audit_map_file_fixture)
 
         self.service_name = 'neutron'
+        self.service_type = 'network'
 
     @property
     def audit_map(self):
@@ -52,7 +54,7 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "service/network/networks",
+                         "network/networks",
                          None, self.service_name)
 
     def test_post_create_neutron_style(self):
@@ -111,7 +113,7 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "service/network/qos/policies", None,
+                         "network/qos/policies", None,
                          self.service_name)
 
     def test_post_create_multiple(self):
