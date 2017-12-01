@@ -101,7 +101,7 @@ class OpenStackAuditMiddleware(object):
 
             rest_name = spec.get('api_name', name)
             singleton = spec.get('singleton', False)
-            type_name = name
+            type_name = name.replace('-', '_')
             type_uri = spec.get('type_uri', pfx + "/" + name)
             el_type_name = None
             el_type_uri = None
@@ -302,6 +302,8 @@ class OpenStackAuditMiddleware(object):
         name = payload.get('name')
         if name is None:
             name = payload.get('displayName')
+            if name is None:
+                name = payload.get('description')
         return resource.Resource(payload.get(res_spec.id_field, res_parent_id),
                                  res_spec.el_type_uri or res_spec.type_uri,
                                  name)

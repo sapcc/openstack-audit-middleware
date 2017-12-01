@@ -59,14 +59,14 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
     def test_post_create_neutron_style(self):
         rid = str(uuid.uuid4().hex)
-        rname = 'network1'
-        url = self.build_url('networks', prefix='/v2.0')
+        rname = 'sgr1'
+        url = self.build_url('security-group-rules', prefix='/v2.0')
         request, response = self.build_api_call('POST', url, resp_json={
-            'network': {'id': rid, 'name': rname}})
+            'security_group_rule': {'id': rid, 'description': rname}})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "network/network", rid, rname)
+                         "network/security-group-rule", rid, rname)
 
     def test_post_create_namespaced(self):
         """ tests the use of singleton resources for namespace prefixes
