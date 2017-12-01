@@ -21,6 +21,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
         super(AuditApiLogicTest, self).setUp()
         self.service_name = 'nova'
+        self.service_type = 'compute'
 
     def test_get_list(self):
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
@@ -28,7 +29,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "service/compute/servers", None,
+                         "compute/servers", None,
                          self.service_name)
 
     def test_get_list_child(self):
@@ -262,7 +263,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, "update/disable",
-                         "service/compute/os-services", None,
+                         "compute/os-services", None,
                          self.service_name)
 
     def test_post_action_missing_payload(self):
@@ -320,7 +321,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, "read/list/details",
-                         "service/compute/servers", None,
+                         "compute/servers", None,
                          self.service_name)
 
         # TODO: fix and enable for Swift

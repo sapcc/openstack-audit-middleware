@@ -263,7 +263,6 @@ class OpenStackAuditMiddleware(object):
         else:
             action_result = taxonomy.UNKNOWN
 
-        observer = self._create_target_service_resource(res_spec, request)
         target = None
         if res_id or res_parent_id:
             rtype = None
@@ -275,7 +274,11 @@ class OpenStackAuditMiddleware(object):
                                        typeURI=rtype)
         else:
             # use the service as resource if element has been addressed
-            target = observer
+            target = resource.Resource(typeURI=res_spec.type_uri,
+                                       id=self._service_id,
+                                       name=self._service_name)
+        target.add_address(endpoint.Endpoint(request.path_url))
+        observer = self._create_observer_resource(request)
 
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
@@ -303,15 +306,13 @@ class OpenStackAuditMiddleware(object):
                                  res_spec.el_type_uri or res_spec.type_uri,
                                  name)
 
-    def _create_target_service_resource(self, res_spec, req):
+    def _create_observer_resource(self, req):
         """Build target resource."""
-        target_type_uri = 'service/' + res_spec.type_uri
-        target = resource.Resource(typeURI=target_type_uri,
-                                   id=self._service_id,
-                                   name=self._service_name)
-        target.add_address(endpoint.Endpoint(req.path_url))
+        observer = resource.Resource(typeURI='service/' + self._service_type,
+                                     id=self._service_id,
+                                     name=self._service_name)
 
-        return target
+        return observer
 
     def _get_action(self, res_spec, res_id, request, action_suffix):
         """Given a resource spec, a request and a path suffix, deduct

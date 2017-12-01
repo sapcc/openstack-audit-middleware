@@ -76,6 +76,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
         # service_name needs to be redefined by subclass
         self.service_name = None
+        self.service_type = None
         self.project_id = str(uuid.uuid4().hex)
         self.user_id = str(uuid.uuid4().hex)
         self.username = "test user " + str(user_counter)
@@ -99,19 +100,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
                        'HTTP_X_PROJECT_ID': self.project_id,
-                       'HTTP_X_IDENTITY_STATUS': 'Confirmed',
-                       'HTTP_X_SERVICE_CATALOG':
-                           '''[{"endpoints_links": [],
-                                "endpoints": [{"adminURL":
-                                               "http://admin_host:8774",
-                                               "region": "RegionOne",
-                                               "publicURL":
-                                               "http://public_host:8774",
-                                               "internalURL":
-                                               "http://internal_host:8774"}],
-                                "type": "compute",
-                                "name": "nova"}]''',
-                       }
+                       'HTTP_X_IDENTITY_STATUS': 'Confirmed'}
         if req_type:
             env_headers['REQUEST_METHOD'] = req_type
         return env_headers
@@ -175,6 +164,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         if target_id:  # only check what is known
             self.assertEqual(event['target'].get('id'), target_id)
         self.assertEqual(event['target']['typeURI'], target_type_uri)
+        self.assertEqual(event['observer']['typeURI'],
+                         'service/' + self.service_type)
         self.assertIsNotNone(event['observer']['id'])
         self.assertEqual(event['observer'].get('name'), self.service_name)
 
