@@ -192,7 +192,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         request, response = self.build_api_call('POST', url, resp_json={
-            'id': rid, 'displayName': rname})
+            'id': rid, 'name': rname})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,

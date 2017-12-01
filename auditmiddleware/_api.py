@@ -29,8 +29,8 @@ from pycadf import resource
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
                                        'type_uri', 'el_type_uri', 'singleton',
-                                       'id_field', 'custom_actions',
-                                       'children'])
+                                       'id_field', 'name_field',
+                                       'custom_actions', 'children'])
 
 method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
                        'HEAD': taxonomy.ACTION_READ, 'PUT':
@@ -116,6 +116,7 @@ class OpenStackAuditMiddleware(object):
             spec = ResourceSpec(type_name, el_type_name,
                                 type_uri, el_type_uri, singleton,
                                 spec.get('custom_id', 'id'),
+                                spec.get('custom_name', 'name'),
                                 spec.get('custom_actions', {}),
                                 self._build_audit_map(spec.get('children', {}),
                                                       childs_parent_type_uri))
@@ -299,11 +300,7 @@ class OpenStackAuditMiddleware(object):
         return event
 
     def _create_target_resource(self, res_spec, res_parent_id, payload):
-        name = payload.get('name')
-        if name is None:
-            name = payload.get('displayName')
-            if name is None:
-                name = payload.get('description')
+        name = payload.get(res_spec.name_field)
         return resource.Resource(payload.get(res_spec.id_field, res_parent_id),
                                  res_spec.el_type_uri or res_spec.type_uri,
                                  name)
