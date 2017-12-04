@@ -57,7 +57,7 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "network/networks",
                          None, self.service_name)
 
-    def test_post_create_neutron_style(self):
+    def test_post_create_sgp(self):
         rid = str(uuid.uuid4().hex)
         rname = 'sgr1'
         url = self.build_url('security-group-rules', prefix='/v2.0')
@@ -67,6 +67,52 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "network/security-group-rule", rid, rname)
+
+    def test_post_create_floatingips(self):
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('floatingips', prefix='/v2.0')
+        request, response = self.build_api_call('POST', url,
+                                                req_json={
+                                                    "floatingip": {
+                                                        "floating_network_id": "376da547-b977-4cfe-9cba-275c80debf57",
+                                                        "port_id":
+                                                            "ce705c24-c1ef-408a-bda3-7bbd946164ab",
+                                                        "subnet_id":
+                                                            "278d9507-36e7-403c-bb80-1d7093318fe6",
+                                                        "fixed_ip_address":
+                                                            "10.0.0.3",
+                                                        "floating_ip_address": "172.24.4.228",
+                                                        "description":
+                                                            "floating ip for "
+                                                            "testing",
+                                                        "dns_domain":
+                                                            "my-domain.org.",
+                                                        "dns_name": "myfip"
+                                                    }
+                                                }, resp_json={
+                "floatingip": {
+                    "fixed_ip_address": "10.0.0.3",
+                    "floating_ip_address": "172.24.4.228",
+                    "floating_network_id":
+                        "376da547-b977-4cfe-9cba-275c80debf57",
+                    "id": rid,
+                    "port_id": "ce705c24-c1ef-408a-bda3-7bbd946164ab",
+                    "router_id": "d23abc8d-2991-4a55-ba98-2aaea84cc72f",
+                    "status": "ACTIVE",
+                    "project_id": "4969c491a3c74ee4af974e6d800c62de",
+                    "tenant_id": "4969c491a3c74ee4af974e6d800c62de",
+                    "description": "floating ip for testing",
+                    "dns_domain": "my-domain.org.",
+                    "dns_name": "myfip",
+                    "created_at": "2016-12-21T01:36:04Z",
+                    "updated_at": "2016-12-21T01:36:04Z",
+                    "revision_number": 1
+                }
+            })
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "network/floatingip", rid)
 
     def test_post_create_namespaced(self):
         """ tests the use of singleton resources for namespace prefixes

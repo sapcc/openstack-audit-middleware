@@ -25,6 +25,7 @@ from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
 from pycadf import resource
+from pycadf.cadftaxonomy import UNKNOWN
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -301,8 +302,14 @@ class OpenStackAuditMiddleware(object):
 
     def _create_target_resource(self, res_spec, res_parent_id, payload):
         name = payload.get(res_spec.name_field)
-        return resource.Resource(payload.get(res_spec.id_field, res_parent_id),
-                                 res_spec.el_type_uri or res_spec.type_uri,
+        id = payload.get(res_spec.id_field)
+        if not id:
+            if not res_spec.singleton:
+                self._log.warning("ID field missing in payload for %s",
+                                  res_spec.type_uri)
+            id = res_parent_id or taxonomy.UNKNOWN
+
+        return resource.Resource(id, res_spec.el_type_uri or res_spec.type_uri,
                                  name)
 
     def _create_observer_resource(self, req):
