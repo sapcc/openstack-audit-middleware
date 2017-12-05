@@ -50,7 +50,7 @@ path to the `audit_map_file` option of the filter definition::
 
 ```
 [filter:audit]
-paste.filter_factory = keystonemiddleware.audit:filter_factory
+paste.filter_factory = auditmiddleware:filter_factory
 audit_map_file = /etc/nova/api_audit_map.yaml
 ```
 

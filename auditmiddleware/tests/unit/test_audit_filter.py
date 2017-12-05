@@ -209,7 +209,26 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
 
-    def test_post_create_multiple(self):
+    def test_post_create_cross_project_wrapped(self):
+        rid = str(uuid.uuid4().hex)
+        pid = str(uuid.uuid4().hex)
+        rname = 'server1'
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        request, response = self.build_api_call('POST', url, resp_json={
+            'server': {'id': rid, 'name': rname, 'project_id': pid}})
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/server", rid, rname)
+
+        scope_attachment = {'name': 'project_id',
+                            'typeURI': taxonomy.SECURITY_PROJECT,
+                            'content': pid}
+        self.assertIn(scope_attachment, event['target'][
+            'attachments'], "target attachment should contain target "
+                            "project_id for cross-project create actions")
+
+    def test_post_create_multiple_wrapped(self):
         items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i)} for
                  i in range(3)]
 
@@ -224,6 +243,29 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "compute/server",
                              items[idx]['id'], items[idx]['name'])
+
+    def test_post_create_multiple_cross_project_wrapped(self):
+        items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i),
+                  'project_id': str(uuid.uuid4().hex)} for
+                 i in range(3)]
+
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        # Note: this batch create call is made up. it does not exist in nova
+        request, response = self.build_api_call('POST', url, resp_json={
+            "servers": items})
+
+        events = self.build_event_list(request, response)
+
+        for idx, event in enumerate(events):
+            self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                             "compute/server",
+                             items[idx]['id'], items[idx]['name'])
+            scope_attachment = {'name': 'project_id',
+                                'content': items[idx]['project_id'],
+                                'typeURI': taxonomy.SECURITY_PROJECT}
+            self.assertIn(scope_attachment, event['target']['attachments'],
+                          "target attachment should contain target "
+                          "project_id for cross-project create actions")
 
     def test_post_create_child(self):
         rid = str(uuid.uuid4().hex)
