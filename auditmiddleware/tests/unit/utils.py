@@ -17,21 +17,21 @@ import warnings
 
 import fixtures
 import mock
-from oslo_log import log as logging
 import oslotest.base as oslotest
 import requests
 import webob
 import webtest
+from oslo_log import log as logging
 
 
 class BaseTestCase(oslotest.BaseTestCase):
     def setUp(self):
         super(BaseTestCase, self).setUp()
 
-        # If keystonemiddleware calls any deprecated function this will raise
+        # If auditmiddleware calls any deprecated function this will raise
         # an exception.
         warnings.filterwarnings('error', category=DeprecationWarning,
-                                module='^keystonemiddleware\\.')
+                                module='^auditmiddleware\\.')
         self.addCleanup(warnings.resetwarnings)
 
         self.logger = self.useFixture(fixtures.FakeLogger(level=logging.DEBUG))

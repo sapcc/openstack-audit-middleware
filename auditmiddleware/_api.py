@@ -11,7 +11,6 @@
 # under the License.
 
 import collections
-import copy
 import hashlib
 import re
 import socket
@@ -25,6 +24,8 @@ from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
 from pycadf import resource
+from pycadf.attachment import Attachment
+
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -202,36 +203,55 @@ class OpenStackAuditMiddleware(object):
     def _create_cadf_events(self, res_id, res_parent_id, res_spec, request,
                             response):
 
-        event = self._create_cadf_event(res_spec, res_id, res_parent_id,
-                                        request, response, None)
         # on create, requests the ID is available only after the response
-        if not res_id and event.action.startswith(taxonomy.ACTION_CREATE) \
-                and response and response.content_length > 0 \
-                and response.content_type == "application/json":
+        # also this is the place where
+        if response and response.content_length > 0 \
+           and response.content_type == "application/json":
             payload = response.json
 
-            # check for bulk-operation
-            if not res_spec.singleton and res_spec.type_name in payload:
-                # payload contains an attribute named like the resource
-                # which contains a list of items
-                events = []
-                for subpayload in payload[res_spec.type_name]:
-                    ev = copy.copy(event)
-                    ev.target = self._create_target_resource(res_spec,
-                                                             res_parent_id,
-                                                             subpayload)
-                    events.append(ev)
+            return self._create_events_from_payload(res_id, res_parent_id,
+                                                    res_spec, request,
+                                                    response, payload)
+        else:
+            event = self._create_cadf_event(res_spec, res_id, res_parent_id,
+                                            request, response, None)
+            return [event]
 
-                return events
+    def _create_events_from_payload(self, res_id, res_parent_id, res_spec,
+                                    request,
+                                    response, payload):
+        # check for bulk-operation
+        if not res_spec.singleton and res_spec.type_name in payload:
+            # payload contains an attribute named like the resource
+            # which contains a list of items
+            events = []
+            for subpayload in payload[res_spec.type_name]:
+                ev = self._create_event_from_payload(res_spec, res_id,
+                                                     res_parent_id,
+                                                     request, response,
+                                                     subpayload)
+                events.append(ev)
 
+            return events
+        else:
             # remove possible wrapper elements
             payload = payload.get(res_spec.el_type_name, payload)
 
-            event.target = self._create_target_resource(res_spec,
-                                                        res_parent_id,
-                                                        payload)
+            event = self._create_event_from_payload(res_spec, res_id,
+                                                    res_parent_id,
+                                                    request, response,
+                                                    payload)
+            return [event]
 
-        return [event]
+    def _create_event_from_payload(self, res_spec, res_id, res_parent_id,
+                                   request, response, subpayload):
+        ev = self._create_cadf_event(res_spec, res_id,
+                                     res_parent_id, request,
+                                     response, None)
+        ev.target = self._create_target_resource(res_spec, res_id,
+                                                 res_parent_id,
+                                                 subpayload)
+        return ev
 
     def _create_cadf_event(self, res_spec, res_id, res_parent_id, request,
                            response, action_suffix):
@@ -299,11 +319,28 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    def _create_target_resource(self, res_spec, res_parent_id, payload):
+    def _create_target_resource(self, res_spec, res_id, res_parent_id,
+                                payload):
+        """ builds a target resource from payload
+        """
         name = payload.get(res_spec.name_field)
-        return resource.Resource(payload.get(res_spec.id_field, res_parent_id),
-                                 res_spec.el_type_uri or res_spec.type_uri,
-                                 name)
+        id = res_id or payload.get(res_spec.id_field)
+        if not id:
+            if not res_spec.singleton:
+                self._log.warning("ID field missing in payload for %s",
+                                  res_spec.type_uri)
+            id = res_parent_id or taxonomy.UNKNOWN
+
+        target = resource.Resource(id, res_spec.el_type_uri or
+                                   res_spec.type_uri,
+                                   name)
+        project_id = payload.get('project_id') or payload.get('target_id')
+        if project_id:
+            attach_val = Attachment(taxonomy.SECURITY_PROJECT, project_id,
+                                    'project_id')
+            target.add_attachment(attach_val)
+
+        return target
 
     def _create_observer_resource(self, req):
         """Build target resource."""
@@ -348,8 +385,10 @@ class OpenStackAuditMiddleware(object):
         if method == 'POST':
             return taxonomy.ACTION_UPDATE if res_id else \
                 taxonomy.ACTION_CREATE
-        elif method == 'GET':
+        elif method == 'GET' or method == 'HEAD':
             return taxonomy.ACTION_READ if res_id else taxonomy.ACTION_LIST
+        elif method == "PATCH":
+            return taxonomy.ACTION_UPDATE
         return method_taxonomy_map[method]
 
     def _map_action_suffix(self, res_spec, action_suffix, method, res_id,
