@@ -91,8 +91,6 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                            "router_id":
                                "d23abc8d-2991-4a55-ba98-2aaea84cc72f",
                            "status": "ACTIVE",
-                           "project_id":
-                               "4969c491a3c74ee4af974e6d800c62de",
                            "tenant_id":
                                "4969c491a3c74ee4af974e6d800c62de",
                            "description": "floating ip for "
@@ -173,13 +171,12 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                 "mac_address": "fa:16:3e:c9:cb:f0",
                 "name": rname,
                 "network_id": "a87cc70a-3e15-4acf-8205-9b711a3531b7",
-                "project_id": pid,
                 "revision_number": 1,
                 "security_groups": [
                     "f0ac4394-7e4a-4409-9701-ba8be283dbc3"
                 ],
                 "status": "DOWN",
-                "tenant_id": "d6700c0c9ffa4f1cb322cd4a1f3906fa"
+                "tenant_id": pid
             }
         }
         request, response = self.build_api_call('POST', url,
@@ -192,9 +189,9 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         scope_attachment = {'name': 'project_id',
                             'typeURI': taxonomy.SECURITY_PROJECT,
                             'content': pid}
-        self.assertIn(scope_attachment, event['target'][
-            'attachments'], "target attachment should contain target "
-                            "project_id for cross-project create actions")
+        self.assertIn(scope_attachment, event['target']['attachments'],
+                      "target attachment should contain target project_id "
+                      "for cross-project create actions")
 
     def test_post_create_namespaced(self):
         """ tests the use of singleton resources for namespace prefixes

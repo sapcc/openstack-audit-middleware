@@ -253,7 +253,7 @@ class OpenStackAuditMiddleware(object):
                                                  res_parent_id,
                                                  subpayload)
 
-        self._log.debug("create event %s from payload:\n%s", ev,
+        self._log.debug("create event %s from payload:\n%s", ev.as_dict(),
                         subpayload)
 
         return ev
@@ -339,7 +339,7 @@ class OpenStackAuditMiddleware(object):
         target = resource.Resource(id, res_spec.el_type_uri or
                                    res_spec.type_uri,
                                    name)
-        project_id = payload.get('project_id') or payload.get('target_id')
+        project_id = payload.get('project_id') or payload.get('tenant_id')
         if project_id:
             attach_val = Attachment(taxonomy.SECURITY_PROJECT, project_id,
                                     'project_id')
