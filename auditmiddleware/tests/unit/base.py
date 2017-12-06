@@ -127,16 +127,20 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                                   remote_addr='192.168.0.1')
         if req_json:
             req.json = req_json
+        elif method[0] == 'P':  # POST, PUT, PATCH
+            req.json = {'name': 'utest'}
 
         resp = webob.Response(content_type=JSON)
         if resp_json:
             resp.json = resp_json
+        elif method == "GET":
+            resp.json = {}
 
         if resp_code == 0:
             resp.status_code = \
-                {'GET': 200, 'HEAD': 200, 'POST': 201, 'PUT': 200,
-                 'DELETE': 204}[
-                    method]
+                {'GET': 200, 'HEAD': 200, 'PATCH': 200, 'POST': 201, 'PUT':
+                    200,
+                 'DELETE': 204}[method]
             if method == 'POST' and not resp_json:
                 resp.status_code = 204
         else:

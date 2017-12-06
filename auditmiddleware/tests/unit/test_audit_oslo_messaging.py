@@ -10,8 +10,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import mock
 import time
+
+import mock
 from oslo_messaging import MessagingException
 
 from auditmiddleware.tests.unit import base
@@ -29,7 +30,7 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
 
         with mock.patch('oslo_messaging.notify.notifier.Notifier'
                         '._notify',
-                        side_effect=MessagingException("test exception")) as\
+                        side_effect=MessagingException("test exception")) as \
                 driver:
             app = self.create_simple_app()
             path = '/v2/' + self.project_id + '/servers'
