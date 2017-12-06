@@ -332,7 +332,7 @@ class OpenStackAuditMiddleware(object):
         id = res_id or payload.get(res_spec.id_field)
         if not id:
             if not res_spec.singleton:
-                self._log.warning("ID field missing in payload for %s",
+                self._log.debug("ID field missing in payload for %s",
                                   res_spec.type_uri)
             id = res_parent_id or taxonomy.UNKNOWN
 

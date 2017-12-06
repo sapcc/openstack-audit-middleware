@@ -267,6 +267,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                              items[idx]['id'], items[idx]['name'])
 
     def test_post_create_multiple_cross_project_wrapped(self):
+        """ test cross-project batch creation.
+        """
         items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i),
                   'project_id': str(uuid.uuid4().hex)} for
                  i in range(3)]

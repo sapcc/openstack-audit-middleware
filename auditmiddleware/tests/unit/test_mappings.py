@@ -109,6 +109,12 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "network/floatingip", rid)
 
     def test_post_create_ports(self):
+        """ regression test introduced to explain the issue with determining
+        the target project of service calls to neutron api.
+
+        The problem here was that instead of project_id, our Neutron
+        version returned tenant_id ONLY.
+        """
         rid = str(uuid.uuid4().hex)
         pid = str(uuid.uuid4().hex)
         rname = "private-port"
