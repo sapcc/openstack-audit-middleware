@@ -159,6 +159,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                     target_id=None,
                     target_name=None,
                     outcome="success"):
+
+        self.assertIsNotNone(event, "missing event")
         self.assertEqual(event['action'], action)
         self.assertEqual(event['typeURI'],
                          'http://schemas.dmtf.org/cloud/audit/1.0/event')

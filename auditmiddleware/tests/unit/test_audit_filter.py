@@ -34,7 +34,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_get_list_child(self):
         rid = str(uuid.uuid4().hex)
-        # this property is modelled as custom action
+        # this property is modelled as singleton
         key = "os-volume_attachments"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res=key)

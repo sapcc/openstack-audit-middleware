@@ -4,4 +4,4 @@ source = auditmiddleware
 omit = auditmiddleware/tests/*
 
 [report]
-ignore_errors = True
+ignore_errors = False

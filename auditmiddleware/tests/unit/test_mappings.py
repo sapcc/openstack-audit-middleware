@@ -49,12 +49,13 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         return self.audit_map_file_fixture
 
     def test_get_list(self):
-        url = self.build_url('networks', prefix='/v2.0')
+        url = self.build_url('fw', prefix='/v2.0',
+                             child_res="firewalls")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "network/networks",
+                         "network/firewalls",
                          None, self.service_name)
 
     def test_post_create_sgp(self):
@@ -262,3 +263,61 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "network/network",
                              items[idx]['id'], items[idx]['name'])
+
+
+class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
+    def setUp(self):
+        super(CinderAuditMappingTest, self).setUp()
+
+        self.audit_map_file_fixture = "etc/cinder_audit_map.yaml"
+
+        self.audit_map_file_fixture = os.path.realpath(
+            self.audit_map_file_fixture)
+
+        self.service_name = 'cinder'
+        self.service_type = 'storage/volume'
+
+    @property
+    def audit_map(self):
+        return self.audit_map_file_fixture
+
+    def test_post_create_child(self):
+        rid = str(uuid.uuid4().hex)
+        child_rid = str(uuid.uuid4().hex)
+        url = self.build_url('types', prefix='/v3/' + self.project_id,
+                             res_id=rid, child_res="encryption")
+        resp = {"encryption": {
+                "volume_type_id": rid,
+                "control_location": "front-end",
+                "encryption_id": child_rid,
+                "key_size": 128, "provider": "luks",
+                "cipher": "aes-xts-plain64"}}
+
+        request, response = self.build_api_call('POST', url, resp_json=resp)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "storage/volume/type/encryption",
+                         target_id=child_rid)
+
+    def test_get_list_all_children(self):
+        url = self.build_url('types', prefix='/v3/' + self.project_id,
+                             child_res="os-volume-type-access")
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "storage/volume/type/project-acl", None,
+                         self.service_name)
+
+    def test_get_singleton_child(self):
+        rid = str(uuid.uuid4().hex)
+        rid2 = str(uuid.uuid4().hex)
+        # this property is modelled as custom action
+        url = self.build_url('types', prefix='/v3/' + self.project_id,
+                             res_id=rid, child_res="os-volume-type-access")
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "storage/volume/type/project-acl", rid)

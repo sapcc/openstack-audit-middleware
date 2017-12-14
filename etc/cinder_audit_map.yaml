@@ -1,11 +1,24 @@
-service_type: 'block-storage'
+service_type: 'storage/volume'
 service_name: 'cinder'
 
 # capture the target project (e.g. for cross-project calls)
-prefix: '/v[0-9\.]*(?:/(?P<project_id>[0-9a-f\-]+))?'
+prefix: '/v[0-9\.]*/(?P<project_id>[0-9a-f\-]+)'
 # devstack: prefix: '/v2.0'
 
 resources:
-    extensions:
-    types:
-
+  extensions:
+  types:
+    custom_actions:
+      addProjectAccess: allow/project-access
+      removeProjectAccess: deny/project-access
+    children:
+      volume-type-access:
+        singleton: true
+        api_name: os-volume-type-access
+        type_uri: storage/volume/type/project-acl
+      encryptions:
+        api_name: encryption
+        custom_id: encryption_id
+  volumes:
+    custom_actions:
+      details: read/list/details

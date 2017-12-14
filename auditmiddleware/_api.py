@@ -150,7 +150,8 @@ class OpenStackAuditMiddleware(object):
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
             # end of path reached, create the event
-            return self._create_cadf_events(res_id, res_parent_id,
+            return self._create_cadf_events(target_project, res_id,
+                                            res_parent_id,
                                             res_spec, request, response)
 
         # Find next path segment (skip leading / with +1)
@@ -177,7 +178,7 @@ class OpenStackAuditMiddleware(object):
         elif isinstance(res_spec, ResourceSpec):
             # if the ID is set or it is a singleton
             # next up is an action or child
-            if res_id or res_spec.singleton:
+            if res_id or res_spec.singleton or token in res_spec.children:
                 child_res = res_spec.children.get(token)
                 if child_res:
                     # the ID is still the one of the parent
@@ -187,14 +188,14 @@ class OpenStackAuditMiddleware(object):
             elif _UUID_RE.match(token):
                 # next up should be an ID (unless it is a known action)
                 return self._build_events(target_project, res_spec, token,
-                                          res_parent_id,
-                                          request, response, path, next_pos)
+                                          res_parent_id, request, response,
+                                          path, next_pos)
 
             if next_pos == -1:
                 # this must be an action
-                ev = self._create_cadf_event(res_spec, res_id,
-                                             res_parent_id,
-                                             request, response, token)
+                ev = self._create_cadf_event(target_project, res_spec, res_id,
+                                             res_parent_id, request,
+                                             response, token)
                 return [ev] if ev else None
 
         self._log.warning(
@@ -253,7 +254,7 @@ class OpenStackAuditMiddleware(object):
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
                                    subpayload):
-        ev = self._create_cadf_event(res_spec, res_id,
+        ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, None)
         ev.target = self._create_target_resource(target_project, res_spec,
@@ -303,7 +304,7 @@ class OpenStackAuditMiddleware(object):
                                                   res_parent_id)
         else:
             target = self._create_target_resource(project, res_spec,
-                                                  self._service_id)
+                                                  None, self._service_id)
             target.name = self._service_name
 
         observer = self._create_observer_resource(request)
@@ -332,23 +333,20 @@ class OpenStackAuditMiddleware(object):
         """
 
         project_id = target_project
-        id = res_id
+        rid = res_id
+        name = None
+
         # fetch IDs from payload if possible
         if payload:
             name = payload.get(res_spec.name_field)
-            id = res_id or payload.get(res_spec.id_field)
-            if not id:
-                if not res_spec.singleton:
-                    self._log.debug("ID field missing in payload for %s",
-                                    res_spec.type_uri)
-                id = res_parent_id or taxonomy.UNKNOWN
+            rid = rid or payload.get(res_spec.id_field)
 
             project_id = target_project or payload.get('project_id') \
                          or payload.get('tenant_id')
 
-        target = resource.Resource(id, res_spec.el_type_uri or
-                                   res_spec.type_uri,
-                                   name)
+        type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
+        rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
+        target = resource.Resource(rid, type_uri, name)
 
         if project_id:
             attach_val = Attachment(typeURI=taxonomy.SECURITY_PROJECT,
@@ -392,19 +390,23 @@ class OpenStackAuditMiddleware(object):
         """
         method = request.method
         if action_suffix is None:
-            return self._map_method_to_action(method, res_id)
+            return self._map_method_to_action(method, res_spec, res_id)
 
         return self._map_action_suffix(res_spec, action_suffix, method,
                                        res_id, request)
 
-    def _map_method_to_action(self, method, res_id):
+    def _map_method_to_action(self, method, res_spec, res_id):
         if method == 'POST':
-            return taxonomy.ACTION_UPDATE if res_id else \
-                taxonomy.ACTION_CREATE
+            if res_id or res_spec.singleton:
+                return taxonomy.ACTION_UPDATE
+            return taxonomy.ACTION_CREATE
         elif method == 'GET' or method == 'HEAD':
-            return taxonomy.ACTION_READ if res_id else taxonomy.ACTION_LIST
+            if res_id or res_spec.singleton:
+                return taxonomy.ACTION_READ
+            return taxonomy.ACTION_LIST
         elif method == "PATCH":
             return taxonomy.ACTION_UPDATE
+
         return method_taxonomy_map[method]
 
     def _map_action_suffix(self, res_spec, action_suffix, method, res_id,
@@ -438,8 +440,8 @@ class OpenStackAuditMiddleware(object):
         # use defaults if no custom action mapping exists
         if not res_spec.custom_actions:
             # if there are no custom_actions defined, we will just ...
-            return (self._map_method_to_action(method, res_id) + "/" +
-                    rest_action)
+            return (self._map_method_to_action(method, res_spec, res_id) +
+                    "/" + rest_action)
         else:
             self._log.debug("action %s is filtered out (%s)", rest_action,
                             request.path)

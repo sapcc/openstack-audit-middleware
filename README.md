@@ -97,16 +97,27 @@ transport_url = rabbit://user2:passwd@host:5672/another_virtual_host
 Customizing the CADF mapping rules
 ----------------------------------
 
-The CADF mapping rules are essentially a model of resources. Due to REST principles, this model implies how the HTTP API
-requests are formed. Additional hints are added to address exceptions to those principles and support custom values
-for the CADF *action* attribute.
+The CADF mapping rules are essentially a model of resources. Due to REST principles, this model implies how the HTTP API requests are formed.
+
+The path of the request specifies the resource that is the target of the request. It consist of a prefix and a resource path. The resource path is denoting the resource. The prefix is used for versioning and routing. Sometimes it is even used to specify the target project of an operation (e.g. in Cinder).
+
+In the mapping file, the prefix is specified using a regular expression. In those cases where the prefix contains the target project id, the regular expression needs to capture the relevant part of the prefix using a _named_ match group called
+_project\_id_
+
+```
+prefix: '/v2.0/(?P<project_id>[0-9a-f\-]*)'
+```
+
+The resource path is a concatenation of resource names and IDs.
+
+Additional hints are added to address exceptions to those principles and support custom values for the CADF *action* attribute.
 
 Example (Nova)::
 ```
   # service type as configured in the OpenStack catalog
   service_type: compute
-  # configure prefix 
-  prefix: '/v2[0-9\.]*/[0-9a-f\-]*'
+  # configure prefix, use the named match group 'project_id' to mark the tenant
+  prefix: '/v2[0-9\.]*/(?P<project_id>[0-9a-f\-]*)'
    
   # describe resources exposed by the REST API
   # URL paths follow one of the following patterns:
