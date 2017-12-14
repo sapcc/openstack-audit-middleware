@@ -49,12 +49,13 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         return self.audit_map_file_fixture
 
     def test_get_list(self):
-        url = self.build_url('networks', prefix='/v2.0')
+        url = self.build_url('fw', prefix='/v2.0',
+                             child_res="firewalls")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "network/networks",
+                         "network/firewalls",
                          None, self.service_name)
 
     def test_post_create_sgp(self):
