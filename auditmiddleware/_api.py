@@ -19,14 +19,12 @@ import uuid
 import yaml
 from oslo_log import log as logging
 from pycadf import cadftaxonomy as taxonomy
-from pycadf import endpoint
 from pycadf import cadftype
 from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
 from pycadf import resource
 from pycadf.attachment import Attachment
-
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -128,7 +126,7 @@ class OpenStackAuditMiddleware(object):
 
     def create_events(self, request, response=None):
         # drop the endpoint's path prefix
-        path = self._strip_url_prefix(request)
+        path, target_project = self._strip_url_prefix(request)
         if not path:
             self._log.info("ignoring request with path: %s",
                            request.path)
@@ -136,11 +134,11 @@ class OpenStackAuditMiddleware(object):
 
         path = path[:-1] if path.endswith('/') else path
         path = path[:-5] if path.endswith('.json') else path
-        return self._build_events(self._resource_specs, None, None, request,
-                                  response, path, 0)
+        return self._build_events(target_project, self._resource_specs, None, None,
+                                  request, response, path, 0)
 
-    def _build_events(self, res_spec, res_id, res_parent_id, request, response,
-                      path, cursor=0):
+    def _build_events(self, target_project, res_spec, res_id, res_parent_id,
+                      request, response, path, cursor=0):
         """ Parse a resource request recursively and build CADF events from it
 
         :param res_tree:
@@ -172,7 +170,9 @@ class OpenStackAuditMiddleware(object):
                 # no such name, ignore/filter the resource
                 return None
 
-            return self._build_events(res_spec, None, None, request, response,
+            return self._build_events(target_project, res_spec, None, None,
+                                      request,
+                                      response,
                                       path, next_pos)
         elif isinstance(res_spec, ResourceSpec):
             # if the ID is set or it is a singleton
@@ -181,12 +181,13 @@ class OpenStackAuditMiddleware(object):
                 child_res = res_spec.children.get(token)
                 if child_res:
                     # the ID is still the one of the parent
-                    return self._build_events(child_res, None,
+                    return self._build_events(target_project, child_res, None,
                                               res_id or res_parent_id, request,
                                               response, path, next_pos)
             elif _UUID_RE.match(token):
                 # next up should be an ID (unless it is a known action)
-                return self._build_events(res_spec, token, res_parent_id,
+                return self._build_events(target_project, res_spec, token,
+                                          res_parent_id,
                                           request, response, path, next_pos)
 
             if next_pos == -1:
@@ -201,34 +202,37 @@ class OpenStackAuditMiddleware(object):
             token, request.path)
         return None
 
-    def _create_cadf_events(self, res_id, res_parent_id, res_spec, request,
-                            response):
+    def _create_cadf_events(self, target_project, res_id, res_parent_id,
+                            res_spec, request, response):
 
         # on create, requests the ID is available only after the response
         # also this is the place where
         if request.method == 'POST' and response \
-           and response.content_length > 0 \
-           and response.content_type == "application/json":
+                and response.content_length > 0 \
+                and response.content_type == "application/json":
             payload = response.json
 
-            return self._create_events_from_payload(res_id, res_parent_id,
+            return self._create_events_from_payload(target_project, res_id,
+                                                    res_parent_id,
                                                     res_spec, request,
                                                     response, payload)
         else:
-            event = self._create_cadf_event(res_spec, res_id, res_parent_id,
+            event = self._create_cadf_event(target_project, res_spec, res_id,
+                                            res_parent_id,
                                             request, response, None)
             return [event]
 
-    def _create_events_from_payload(self, res_id, res_parent_id, res_spec,
-                                    request,
-                                    response, payload):
+    def _create_events_from_payload(self, target_project, res_id,
+                                    res_parent_id,
+                                    res_spec, request, response, payload):
         # check for bulk-operation
         if not res_spec.singleton and res_spec.type_name in payload:
             # payload contains an attribute named like the resource
             # which contains a list of items
             events = []
             for subpayload in payload[res_spec.type_name]:
-                ev = self._create_event_from_payload(res_spec, res_id,
+                ev = self._create_event_from_payload(target_project, res_spec,
+                                                     res_id,
                                                      res_parent_id,
                                                      request, response,
                                                      subpayload)
@@ -239,27 +243,30 @@ class OpenStackAuditMiddleware(object):
             # remove possible wrapper elements
             payload = payload.get(res_spec.el_type_name, payload)
 
-            event = self._create_event_from_payload(res_spec, res_id,
+            event = self._create_event_from_payload(target_project, res_spec,
+                                                    res_id,
                                                     res_parent_id,
                                                     request, response,
                                                     payload)
             return [event]
 
-    def _create_event_from_payload(self, res_spec, res_id, res_parent_id,
-                                   request, response, subpayload):
+    def _create_event_from_payload(self, target_project, res_spec, res_id,
+                                   res_parent_id, request, response,
+                                   subpayload):
         ev = self._create_cadf_event(res_spec, res_id,
                                      res_parent_id, request,
                                      response, None)
-        ev.target = self._create_target_resource(res_spec, res_id,
-                                                 res_parent_id,
-                                                 subpayload)
+        ev.target = self._create_target_resource(target_project, res_spec,
+                                                 res_id,
+                                                 res_parent_id, subpayload)
 
         self._log.debug("create event %s from payload:\n%s", ev.as_dict(),
                         subpayload)
 
         return ev
 
-    def _create_cadf_event(self, res_spec, res_id, res_parent_id, request,
+    def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
+                           request,
                            response, action_suffix):
         action = self._get_action(res_spec, res_id, request, action_suffix)
         if not action:
@@ -292,19 +299,13 @@ class OpenStackAuditMiddleware(object):
 
         target = None
         if res_id or res_parent_id:
-            rtype = None
-            if not res_id:
-                rtype = res_spec.type_uri
-            else:
-                rtype = res_spec.el_type_uri
-            target = resource.Resource(id=_make_uuid(res_id or res_parent_id),
-                                       typeURI=rtype)
+            target = self._create_target_resource(project, res_spec, res_id,
+                                                  res_parent_id)
         else:
-            # use the service as resource if element has been addressed
-            target = resource.Resource(typeURI=res_spec.type_uri,
-                                       id=self._service_id,
-                                       name=self._service_name)
-        target.add_address(endpoint.Endpoint(request.path_url))
+            target = self._create_target_resource(project, res_spec,
+                                                  self._service_id)
+            target.name = self._service_name
+
         observer = self._create_observer_resource(request)
 
         event = eventfactory.EventFactory().new_event(
@@ -325,22 +326,30 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    def _create_target_resource(self, res_spec, res_id, res_parent_id,
-                                payload):
+    def _create_target_resource(self, target_project, res_spec, res_id,
+                                res_parent_id=None, payload=None):
         """ builds a target resource from payload
         """
-        name = payload.get(res_spec.name_field)
-        id = res_id or payload.get(res_spec.id_field)
-        if not id:
-            if not res_spec.singleton:
-                self._log.debug("ID field missing in payload for %s",
-                                res_spec.type_uri)
-            id = res_parent_id or taxonomy.UNKNOWN
+
+        project_id = target_project
+        id = res_id
+        # fetch IDs from payload if possible
+        if payload:
+            name = payload.get(res_spec.name_field)
+            id = res_id or payload.get(res_spec.id_field)
+            if not id:
+                if not res_spec.singleton:
+                    self._log.debug("ID field missing in payload for %s",
+                                    res_spec.type_uri)
+                id = res_parent_id or taxonomy.UNKNOWN
+
+            project_id = target_project or payload.get('project_id') \
+                         or payload.get('tenant_id')
 
         target = resource.Resource(id, res_spec.el_type_uri or
                                    res_spec.type_uri,
                                    name)
-        project_id = payload.get('project_id') or payload.get('tenant_id')
+
         if project_id:
             attach_val = Attachment(typeURI=taxonomy.SECURITY_PROJECT,
                                     content=project_id,
@@ -446,7 +455,19 @@ class OpenStackAuditMiddleware(object):
         """ Removes the prefix from the URL paths
         :param req: incoming request
         :return: URL request path without the leading prefix or None if prefix
-        was missing
+        was missing and optional target tenant or None
         """
         g = self._prefix_re.match(request.path)
-        return request.path[g.end():] if g else None
+        if g:
+            path = request.path[g.end():]
+            project = None
+            try:
+                # project needs to be specified in a named group in order to
+                #  be detected
+                project = g.group('project_id')
+            except IndexError:
+                project = None
+
+            return path, project
+
+        return None, None
