@@ -18,7 +18,8 @@ import uuid
 
 import yaml
 from oslo_log import log as logging
-from pycadf import cadftaxonomy as taxonomy, endpoint
+from pycadf import cadftaxonomy as taxonomy
+from pycadf import endpoint
 from pycadf import cadftype
 from pycadf import eventfactory
 from pycadf import host
@@ -333,7 +334,7 @@ class OpenStackAuditMiddleware(object):
         if not id:
             if not res_spec.singleton:
                 self._log.debug("ID field missing in payload for %s",
-                                  res_spec.type_uri)
+                                res_spec.type_uri)
             id = res_parent_id or taxonomy.UNKNOWN
 
         target = resource.Resource(id, res_spec.el_type_uri or
@@ -341,8 +342,9 @@ class OpenStackAuditMiddleware(object):
                                    name)
         project_id = payload.get('project_id') or payload.get('tenant_id')
         if project_id:
-            attach_val = Attachment(taxonomy.SECURITY_PROJECT, project_id,
-                                    'project_id')
+            attach_val = Attachment(typeURI=taxonomy.SECURITY_PROJECT,
+                                    content=project_id,
+                                    name='project_id')
             target.add_attachment(attach_val)
 
         return target
