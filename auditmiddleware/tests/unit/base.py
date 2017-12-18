@@ -21,8 +21,7 @@ from testtools.matchers import MatchesRegex
 import auditmiddleware
 from auditmiddleware.tests.unit import utils
 
-iso8601 = r'^\d{' \
-    r'4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
+iso8601 = r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
 
 JSON = 'application/json'
 
