@@ -22,6 +22,10 @@ provides.
 import copy
 import functools
 
+import datetime
+
+import pycadf
+import pytz
 import webob.dec
 from oslo_config import cfg
 from oslo_context import context as oslo_context
@@ -54,6 +58,26 @@ _AUDIT_OPTS = [
 ]
 CONF = cfg.CONF
 CONF.register_opts(_AUDIT_OPTS, group=AUDIT_MIDDLEWARE_GROUP)
+
+
+# see https://bugs.launchpad.net/pycadf/+bug/1738737
+def patched_get_utc_now(timezone=None):
+    """Return the current UTC time.
+
+    :param timezone: an optional timezone param to offset time to.
+    """
+    utc_datetime = pytz.utc.localize(datetime.datetime.utcnow())
+    if timezone is not None:
+        try:
+            utc_datetime = utc_datetime.astimezone(pytz.timezone(timezone))
+        except Exception as e:
+            _LOG.exception('Error translating timezones: %s ', e)
+
+    return utc_datetime.isoformat()
+
+
+# monkey patch pycadfs flawed timestamp formatter
+pycadf.timestamp.get_utc_now = patched_get_utc_now
 
 
 def _log_and_ignore_error(fn):
