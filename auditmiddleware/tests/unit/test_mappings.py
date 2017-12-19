@@ -199,6 +199,13 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.assertIn(scope_attachment, event['target']['attachments'],
                       "target attachment should contain target project_id "
                       "for cross-project create actions")
+        # check custom attribute
+        custom_value = port_response['port']['security_groups']
+        custom_attachment = {'name': 'security_groups',
+                             'typeURI': 'network/security-groups',
+                             'content': custom_value}
+        self.assertIn(custom_attachment, event['attachments'],
+                      "attachment should contain security_groups value")
 
     def test_post_create_namespaced(self):
         """ tests the use of singleton resources for namespace prefixes

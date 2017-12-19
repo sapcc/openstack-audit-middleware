@@ -86,6 +86,27 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
                          "compute/server", rid)
 
+    def test_patch_custom_attr(self):
+        rid = str(uuid.uuid4().hex)
+        custom_value = {'child1': 'test', 'child2': 'test-two'}
+        # such API does not exist in Nova
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid)
+        request, response = self.build_api_call('PATCH', url,
+            req_json={'custom_attr2': custom_value},
+            resp_json={'custom_attr2': custom_value})
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
+                         "compute/server", rid)
+
+        # check custom attribute
+        custom_attachment = {'name': 'custom_attr2',
+                             'typeURI': '/data/compute/server/custom',
+                             'content': custom_value}
+        self.assertIn(custom_attachment, event['attachments'],
+                      "attachment should contain custom_attr value")
+
     def test_delete(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -277,14 +298,15 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             # make sure the excluded attribute is hidden
             del payload_content['hidden_attr']
             payload_attachment = {'name': 'payload',
-                                  'content': json.dumps(payload_content),
-                                  'typeURI': 'data/json'}
+                                  'content': json.dumps(payload_content,
+                                                        separators=(',', ':')),
+                                  'typeURI': 'xs:string'}
             self.assertIn(payload_attachment, event['attachments'],
                           "event attachment should contain filtered payload "
                           "copy")
             # check custom attribute
             custom_attachment = {'name': 'custom_attr',
-                                 'typeURI': 'data/string',
+                                 'typeURI': 'xs:string',
                                  'content': payload_content['custom_attr']}
             self.assertIn(custom_attachment, event['attachments'],
                           "attachment should contain custom_attr value")
@@ -322,8 +344,9 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             payload_content = req_json['servers'][idx]
             # make sure the excluded attribute is hidden
             payload_attachment = {'name': 'payload',
-                                  'content': json.dumps(payload_content),
-                                  'typeURI': 'data/json'}
+                                  'content': json.dumps(payload_content,
+                                                        separators=(',', ':')),
+                                  'typeURI': 'xs:string'}
             self.assertIn(payload_attachment, event['attachments'],
                           "event attachments should contain payload")
 

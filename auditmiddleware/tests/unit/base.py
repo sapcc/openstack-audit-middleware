@@ -37,7 +37,8 @@ resources:
             confirmResize: update/resize-confirm
             detail: read/list/details
         custom_attributes:
-            custom_attr: data/string
+            custom_attr: "xs:string"
+            custom_attr2: "/data/compute/server/custom"
         payloads:
             # hide this attribute from payload attachments
             exclude: hidden_attr
