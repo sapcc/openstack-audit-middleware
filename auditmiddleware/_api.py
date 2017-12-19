@@ -12,10 +12,12 @@
 
 import collections
 import hashlib
+import json
 import re
 import socket
 import uuid
 
+import six
 import yaml
 from oslo_log import log as logging
 from pycadf import cadftaxonomy as taxonomy
@@ -30,7 +32,8 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
                                        'type_uri', 'el_type_uri', 'singleton',
                                        'id_field', 'name_field',
-                                       'custom_actions', 'children'])
+                                       'custom_actions', 'custom_attributes',
+                                       'children', 'payloads'])
 
 method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
                        'HEAD': taxonomy.ACTION_READ, 'PUT':
@@ -62,6 +65,34 @@ class ClientResource(resource.Resource):
         self.project_id = project_id
 
 
+def str_map(param):
+    if not param:
+        return {}
+
+    for k, v in six.iteritems(param):
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise Exception("Invalid config entry %s:%s (not strings)",
+                            k, v)
+
+    return param
+
+
+def payloads_map(param):
+    if not param:
+        return {'enabled': True}
+
+    param['enabled'] = bool(param.get('enabled', True))
+
+    incl = param.get('include')
+    if incl:
+        param['include'] = [x.strip() for x in incl.split(',')]
+    excl = param.get('exclude')
+    if excl:
+        param['exclude'] = [x.strip() for x in excl.split(',')]
+
+    return param
+
+
 class OpenStackAuditMiddleware(object):
     def __init__(self, cfg_file, log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
@@ -88,7 +119,7 @@ class OpenStackAuditMiddleware(object):
     def _build_audit_map(self, res_dict, parent_type_uri=None):
         result = {}
 
-        for name, s in res_dict.iteritems():
+        for name, s in six.iteritems(res_dict):
             if not s:
                 spec = {}
             else:
@@ -113,14 +144,19 @@ class OpenStackAuditMiddleware(object):
             else:
                 childs_parent_type_uri = type_uri
 
-            spec = ResourceSpec(type_name, el_type_name,
-                                type_uri, el_type_uri, singleton,
-                                spec.get('custom_id', 'id'),
-                                spec.get('custom_name', 'name'),
-                                spec.get('custom_actions', {}),
-                                self._build_audit_map(spec.get('children', {}),
-                                                      childs_parent_type_uri))
-            result[rest_name] = spec
+            res_spec = ResourceSpec(type_name, el_type_name,
+                                    type_uri, el_type_uri, singleton,
+                                    spec.get('custom_id', 'id'),
+                                    spec.get('custom_name', 'name'),
+                                    str_map(spec.get('custom_actions')),
+                                    str_map(spec.get('custom_attributes')),
+                                    self._build_audit_map(
+                                        spec.get('children', {}),
+                                        childs_parent_type_uri),
+                                    payloads_map(spec.get('payloads')))
+
+            # ensure that cust
+            result[rest_name] = res_spec
 
         return result
 
@@ -150,9 +186,9 @@ class OpenStackAuditMiddleware(object):
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
             # end of path reached, create the event
-            return self._create_cadf_events(target_project, res_id,
-                                            res_parent_id,
-                                            res_spec, request, response)
+            return self._create_events(target_project, res_id,
+                                       res_parent_id,
+                                       res_spec, request, response)
 
         # Find next path segment (skip leading / with +1)
         next_pos = path.find('/', cursor + 1)
@@ -203,72 +239,91 @@ class OpenStackAuditMiddleware(object):
             token, request.path)
         return None
 
-    def _create_cadf_events(self, target_project, res_id, res_parent_id,
-                            res_spec, request, response):
-
-        # on create, requests the ID is available only after the response
-        # also this is the place where
-        if request.method == 'POST' and response \
+    def _create_events(self, target_project, res_id,
+                       res_parent_id,
+                       res_spec, request, response):
+        if request.method[0] == 'P' and response \
                 and response.content_length > 0 \
                 and response.content_type == "application/json":
-            payload = response.json
+            res_payload = response.json
 
-            return self._create_events_from_payload(target_project, res_id,
-                                                    res_parent_id,
-                                                    res_spec, request,
-                                                    response, payload)
+            # check for bulk-operation
+            if not res_spec.singleton and res_spec.type_name in res_payload:
+                # payloads contain an attribute named like the resource
+                # which contains a list of items
+                events = []
+                res_pl = res_payload[res_spec.type_name]
+                for subpayload in res_pl:
+                    ev = self._create_event_from_payload(target_project,
+                                                         res_spec,
+                                                         res_id,
+                                                         res_parent_id,
+                                                         request, response,
+                                                         subpayload)
+                    events.append(ev)
+
+                # attach payload if configured
+                if res_spec.payloads['enabled']:
+                    req_pl = request.json[res_spec.type_name]
+                    i = 0
+                    for pl in req_pl:
+                        attach_val = self._create_payload_attachment(pl,
+                                                                     res_spec)
+                        events[i].add_attachment(attach_val)
+                        i += 1
+
+                return events
+            else:
+                # remove possible wrapper elements
+                res_payload = res_payload.get(res_spec.el_type_name,
+                                              res_payload)
+
+                event = self._create_event_from_payload(target_project,
+                                                        res_spec,
+                                                        res_id,
+                                                        res_parent_id,
+                                                        request, response,
+                                                        res_payload)
+
+                # attach payload if configured
+                if res_spec.payloads['enabled']:
+                    req_pl = request.json
+                    # remove possible wrapper elements
+                    req_pl = req_pl.get(res_spec.el_type_name, req_pl)
+                    attach_val = self._create_payload_attachment(req_pl,
+                                                                 res_spec)
+                    event.add_attachment(attach_val)
+
+                return [event]
         else:
             event = self._create_cadf_event(target_project, res_spec, res_id,
                                             res_parent_id,
                                             request, response, None)
             return [event]
 
-    def _create_events_from_payload(self, target_project, res_id,
-                                    res_parent_id,
-                                    res_spec, request, response, payload):
-        # check for bulk-operation
-        if not res_spec.singleton and res_spec.type_name in payload:
-            # payload contains an attribute named like the resource
-            # which contains a list of items
-            events = []
-            for subpayload in payload[res_spec.type_name]:
-                ev = self._create_event_from_payload(target_project, res_spec,
-                                                     res_id,
-                                                     res_parent_id,
-                                                     request, response,
-                                                     subpayload)
-                events.append(ev)
-
-            return events
-        else:
-            # remove possible wrapper elements
-            payload = payload.get(res_spec.el_type_name, payload)
-
-            event = self._create_event_from_payload(target_project, res_spec,
-                                                    res_id,
-                                                    res_parent_id,
-                                                    request, response,
-                                                    payload)
-            return [event]
-
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
                                    subpayload):
+        self._log.debug("create event from payload:\n%s", subpayload)
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, None)
         ev.target = self._create_target_resource(target_project, res_spec,
-                                                 res_id,
-                                                 res_parent_id, subpayload)
+                                                 res_id, res_parent_id,
+                                                 subpayload)
 
-        self._log.debug("create event %s from payload:\n%s", ev.as_dict(),
-                        subpayload)
+        # extract custom attributes from the payload
+        for attr, typeURI in six.iteritems(res_spec.custom_attributes):
+            value = subpayload.get(attr)
+            if value:
+                attach_val = Attachment(typeURI=typeURI, content=value,
+                                        name=attr)
+                ev.add_attachment(attach_val)
 
         return ev
 
     def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
-                           request,
-                           response, action_suffix):
+                           request, response, action_suffix):
         action = self._get_action(res_spec, res_id, request, action_suffix)
         if not action:
             # skip if action filtered out
@@ -318,6 +373,7 @@ class OpenStackAuditMiddleware(object):
             reason=event_reason,
             target=target)
         event.requestPath = request.path_qs
+
         # TODO add reporter step again?
         # event.add_reporterstep(
         #    reporterstep.Reporterstep(
@@ -326,6 +382,30 @@ class OpenStackAuditMiddleware(object):
         #        reporterTime=timestamp.get_utc_now()))
 
         return event
+
+    def _create_payload_attachment(self, payload, res_spec):
+        incl = res_spec.payloads.get('include')
+        excl = res_spec.payloads.get('exclude')
+        res_payload = {}
+        if excl:
+            res_payload = payload
+            # remove possible wrapper elements
+            for k in excl:
+                if k in res_payload:
+                    del res_payload[k]
+        elif incl:
+            for k in incl:
+                v = payload.get(k)
+                if v:
+                    res_payload[k] = v
+        else:
+            res_payload = payload
+
+        attach_val = Attachment(typeURI="data/json",
+                                content=json.dumps(res_payload),
+                                name='payload')
+
+        return attach_val
 
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None):

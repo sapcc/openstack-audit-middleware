@@ -254,8 +254,12 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
         url = self.build_url('networks', prefix='/v2.0')
         # Note: this batch create call is made up. it does not exist in nova
-        request, response = self.build_api_call('POST', url, resp_json={
-            "networks": items})
+        resp_json = {"networks": items}
+        req_json = {"networks": [{'name': 'name-' + str(i)}
+                    for i in range(3)]}
+        request, response = self.build_api_call('POST', url,
+                                                req_json=req_json,
+                                                resp_json=resp_json)
 
         events = self.build_event_list(request, response)
 

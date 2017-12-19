@@ -36,6 +36,11 @@ resources:
             createBackup: backup
             confirmResize: update/resize-confirm
             detail: read/list/details
+        custom_attributes:
+            custom_attr: data/string
+        payloads:
+            # hide this attribute from payload attachments
+            exclude: hidden_attr
         children:
             interfaces:
                 api_name: os-interface
@@ -48,6 +53,8 @@ resources:
                   'DELETE:*': 'delete/metadata/*'
             volume-attachments:
                 api_name: os-volume_attachments
+                payloads:
+                  enabled: false
             tags:
     os-services:
         # all default
