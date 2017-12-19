@@ -1,6 +1,7 @@
 service_type: 'network'
 service_name: 'neutron'
 
+# prefix: '/v2[0-9\.]*(?:/[0-9a-f\-]+)?'
 prefix: '/v2.0'
 
 resources:
@@ -12,6 +13,8 @@ resources:
   floatingips:
   network-ip-availabilities:
   quotas:
+    custom_actions:
+      details: read/list/details
   rbac-policies:
   routers:
   security-groups:
@@ -37,6 +40,7 @@ resources:
   fw:
     # FWaaS 1.0 namespace
     singleton: true
+    type_uri: network/firewalls
     children:
       firewalls:
         type_uri: network/firewalls

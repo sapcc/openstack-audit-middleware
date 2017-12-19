@@ -16,9 +16,12 @@ import webob.dec
 from oslo_config import fixture as cfg_fixture
 from oslo_messaging import conffixture as msg_fixture
 from oslotest import createfile
+from testtools.matchers import MatchesRegex
 
 import auditmiddleware
 from auditmiddleware.tests.unit import utils
+
+iso8601 = r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
 
 JSON = 'application/json'
 
@@ -166,6 +169,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                          'http://schemas.dmtf.org/cloud/audit/1.0/event')
         self.assertEqual(event['outcome'], outcome)
         self.assertEqual(event['eventType'], 'activity')
+        self.assertThat(event['eventTime'], MatchesRegex(iso8601))
         self.assertEqual(event['target'].get('name'), target_name)
         if target_id:  # only check what is known
             self.assertEqual(event['target'].get('id'), target_id)

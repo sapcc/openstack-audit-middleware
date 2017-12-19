@@ -331,7 +331,6 @@ class OpenStackAuditMiddleware(object):
                                 res_parent_id=None, payload=None):
         """ builds a target resource from payload
         """
-
         project_id = target_project
         rid = res_id
         name = None
