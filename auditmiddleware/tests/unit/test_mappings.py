@@ -312,7 +312,6 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
 
     def test_get_singleton_child(self):
         rid = str(uuid.uuid4().hex)
-        rid2 = str(uuid.uuid4().hex)
         # this property is modelled as custom action
         url = self.build_url('types', prefix='/v3/' + self.project_id,
                              res_id=rid, child_res="os-volume-type-access")

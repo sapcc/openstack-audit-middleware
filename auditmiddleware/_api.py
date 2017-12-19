@@ -134,8 +134,8 @@ class OpenStackAuditMiddleware(object):
 
         path = path[:-1] if path.endswith('/') else path
         path = path[:-5] if path.endswith('.json') else path
-        return self._build_events(target_project, self._resource_specs, None, None,
-                                  request, response, path, 0)
+        return self._build_events(target_project, self._resource_specs,
+                                  None, None, request, response, path, 0)
 
     def _build_events(self, target_project, res_spec, res_id, res_parent_id,
                       request, response, path, cursor=0):
@@ -340,8 +340,8 @@ class OpenStackAuditMiddleware(object):
             name = payload.get(res_spec.name_field)
             rid = rid or payload.get(res_spec.id_field)
 
-            project_id = target_project or payload.get('project_id') \
-                         or payload.get('tenant_id')
+            project_id = (target_project or payload.get('project_id') or
+                          payload.get('tenant_id'))
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
