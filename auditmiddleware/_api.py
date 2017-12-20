@@ -94,13 +94,15 @@ def payloads_map(param):
 
 
 class OpenStackAuditMiddleware(object):
-    def __init__(self, cfg_file, log=logging.getLogger(__name__)):
+    def __init__(self, cfg_file, payloads_enabled,
+                 log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
         self._log = log
 
         try:
             conf = yaml.safe_load(open(cfg_file, 'r'))
 
+            self._payloads_enabled = payloads_enabled
             self._service_type = conf['service_type']
             self._service_name = conf.get('service_name', self._service_type)
             self._service_id = self._build_service_id(self._service_name)
@@ -263,7 +265,7 @@ class OpenStackAuditMiddleware(object):
                     events.append(ev)
 
                 # attach payload if configured
-                if res_spec.payloads['enabled']:
+                if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = request.json[res_spec.type_name]
                     i = 0
                     for pl in req_pl:
@@ -286,7 +288,7 @@ class OpenStackAuditMiddleware(object):
                                                         res_payload)
 
                 # attach payload if configured
-                if res_spec.payloads['enabled']:
+                if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = request.json
                     # remove possible wrapper elements
                     req_pl = req_pl.get(res_spec.el_type_name, req_pl)
@@ -316,6 +318,8 @@ class OpenStackAuditMiddleware(object):
         for attr, typeURI in six.iteritems(res_spec.custom_attributes):
             value = subpayload.get(attr)
             if value:
+                if not isinstance(value, basestring):
+                    value = json.dumps(value, separators=(',', ':'))
                 attach_val = Attachment(typeURI=typeURI, content=value,
                                         name=attr)
                 ev.add_attachment(attach_val)

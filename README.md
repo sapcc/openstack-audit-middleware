@@ -66,6 +66,8 @@ audit_map_file = /etc/nova/api_audit_map.yaml
 service_name = test # opt to set HTTP_X_SERVICE_NAME environ variable
 # opt to ignore specific requests
 ignore_req_list = GET
+# turn on logging on request payloads
+record_payloads = True
 ```
 
 Audit middleware can be configured to use its own exclusive notification driver
@@ -139,7 +141,11 @@ Example (Nova)::
         custom_actions:
           # <url-path-suffix>: <cadf-action>
           startup: start/startup
-          # child resources, placed after the parent resource ID in the URL path
+        # resource attributes that should be attached to the event on each create/update
+        custom_attributes:
+          # provide attribute name and value type
+          security_groups: compute/server/security-groups
+        # child resources, placed after the parent resource ID in the URL path
         children:
           migrations:
             # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)

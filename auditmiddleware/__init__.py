@@ -115,7 +115,9 @@ class AuditMiddleware(object):
                                  conf.get('ignore_req_list', '').split(',')]
         self._cadf_audit = _api.OpenStackAuditMiddleware(
             conf.get('audit_map_file'),
+            conf.get('record_payloads', False),
             _LOG)
+
         self._notifier = _notifier.create_notifier(self._conf, _LOG)
         _LOG.debug("audit middleware config: %s", conf)
 

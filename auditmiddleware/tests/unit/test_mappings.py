@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -203,7 +204,8 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         custom_value = port_response['port']['security_groups']
         custom_attachment = {'name': 'security_groups',
                              'typeURI': 'network/security-groups',
-                             'content': custom_value}
+                             'content': json.dumps(custom_value,
+                                                   separators=(",", ":"))}
         self.assertIn(custom_attachment, event['attachments'],
                       "attachment should contain security_groups value")
 

@@ -92,7 +92,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         # such API does not exist in Nova
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
-        request, response = self.build_api_call('PATCH', url,
+        request, response = self.build_api_call(
+            'PATCH', url,
             req_json={'custom_attr2': custom_value},
             resp_json={'custom_attr2': custom_value})
         event = self.build_event(request, response)
@@ -103,7 +104,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         # check custom attribute
         custom_attachment = {'name': 'custom_attr2',
                              'typeURI': '/data/compute/server/custom',
-                             'content': custom_value}
+                             'content': json.dumps(custom_value,
+                                                   separators=(',', ':'))}
         self.assertIn(custom_attachment, event['attachments'],
                       "attachment should contain custom_attr value")
 
@@ -234,12 +236,33 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         rid = str(uuid.uuid4().hex)
         rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
-        request, response = self.build_api_call('POST', url, resp_json={
-            'id': rid, 'name': rname})
+        request, response = self.build_api_call(
+            'POST', url,
+            resp_json={'id': rid, 'name': rname})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
+
+    def test_post_create_rec_payload(self):
+        rid = str(uuid.uuid4().hex)
+        rname = 'server1'
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        payload_content = {'name': rname}
+        request, response = self.build_api_call(
+            'POST', url,
+            req_json=payload_content,
+            resp_json={'id': rid, 'name': rname})
+        event = self.build_event(request, response, record_payloads=True)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/server", rid, rname)
+        payload_attachment = {'name': 'payload',
+                              'content': json.dumps(payload_content,
+                                                    separators=(',', ':')),
+                              'typeURI': 'xs:string'}
+        self.assertIn(payload_attachment, event['attachments'],
+                      "event attachments should contain payload")
 
     def test_post_create_neutron_style(self):
         rid = str(uuid.uuid4().hex)
@@ -287,7 +310,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=req_json,
                                                 resp_json=resp_json)
 
-        events = self.build_event_list(request, response)
+        events = self.build_event_list(request, response, record_payloads=True)
 
         for idx, event in enumerate(events):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
@@ -329,7 +352,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=req_json,
                                                 resp_json=resp_json)
 
-        events = self.build_event_list(request, response)
+        events = self.build_event_list(request, response, record_payloads=True)
 
         for idx, event in enumerate(events):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
@@ -373,10 +396,12 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                 "rotation": 1
             }
         })
-        event = self.build_event(request, response)
+        event = self.build_event(request, response, record_payloads=True)
 
         self.check_event(request, response, event, "backup",
                          "compute/server", rid)
+        # no attachments should be produced on actions
+        self.assertNotIn("attachments", event)
 
     def test_post_action_default_mapping(self):
         url = self.build_url('os-services', prefix='/v2/' + self.project_id,

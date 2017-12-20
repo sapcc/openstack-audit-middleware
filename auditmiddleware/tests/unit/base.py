@@ -116,13 +116,16 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             env_headers['REQUEST_METHOD'] = req_type
         return env_headers
 
-    def build_event(self, req, resp=None, middleware_cfg=None):
-        ev = self.build_event_list(req, resp, middleware_cfg)
+    def build_event(self, req, resp=None, middleware_cfg=None,
+                    record_payloads=False):
+        ev = self.build_event_list(req, resp, middleware_cfg, record_payloads)
         return ev[0] if ev else None
 
-    def build_event_list(self, req, resp=None, middleware_cfg=None):
+    def build_event_list(self, req, resp=None, middleware_cfg=None,
+                         record_payloads=False):
         cfg = middleware_cfg or self.audit_map
-        middleware = auditmiddleware._api.OpenStackAuditMiddleware(cfg)
+        middleware = auditmiddleware._api.OpenStackAuditMiddleware(
+            cfg, record_payloads)
         events = middleware.create_events(req, resp)
         return [e.as_dict() for e in events] if events else None
 
