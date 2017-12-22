@@ -355,8 +355,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "compute/server",
                              items[idx]['id'], items[idx]['name'])
-            self.assertEqual(items[idx]['project_id'], event['target'][
-                'project_id'],
+            self.assertEqual(items[idx]['project_id'],
+                             event['target']['project_id'],
                              "target attachment should contain target "
                              "project_id for cross-project create actions")
             payload_content = req_json['servers'][idx]
