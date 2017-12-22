@@ -194,12 +194,9 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "network/port", rid, rname)
-        scope_attachment = {'name': 'project_id',
-                            'typeURI': taxonomy.SECURITY_PROJECT,
-                            'content': pid}
-        self.assertIn(scope_attachment, event['target']['attachments'],
-                      "target attachment should contain target project_id "
-                      "for cross-project create actions")
+        self.assertEqual(pid, event['target']['project_id'],
+                         "target attachment should contain target "
+                         "project_id for cross-project create actions")
         # check custom attribute
         custom_value = port_response['port']['security_groups']
         custom_attachment = {'name': 'security_groups',

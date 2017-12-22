@@ -59,10 +59,11 @@ class ConfigError(Exception):
     pass
 
 
-class ClientResource(resource.Resource):
-    def __init__(self, project_id=None, **kwargs):
-        super(ClientResource, self).__init__(**kwargs)
+class OpenStackResource(resource.Resource):
+    def __init__(self, project_id=None, domain_id=None, **kwargs):
+        super(OpenStackResource, self).__init__(**kwargs)
         self.project_id = project_id
+        self.domain_id = domain_id
 
 
 def str_map(param):
@@ -333,16 +334,17 @@ class OpenStackAuditMiddleware(object):
             # skip if action filtered out
             return
 
-        project_or_domain_id = request.environ.get(
-            'HTTP_X_PROJECT_ID') or request.environ.get(
-            'HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN)
-        initiator = ClientResource(
+        project_id = request.environ.get('HTTP_X_PROJECT_ID')
+        domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
+        initiator = OpenStackResource(
+            project_id=project_id, domain_id=domain_id,
             typeURI=taxonomy.ACCOUNT_USER,
             id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
+            domain=request.environ.get('HTTP_X_USER_DOMAIN_NAME',
+                                       taxonomy.UNKNOWN),
             host=host.Host(address=request.client_addr,
-                           agent=request.user_agent),
-            project_id=project_or_domain_id)
+                           agent=request.user_agent))
 
         action_result = None
         event_reason = None
@@ -430,13 +432,8 @@ class OpenStackAuditMiddleware(object):
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
-        target = resource.Resource(rid, type_uri, name)
-
-        if project_id:
-            attach_val = Attachment(typeURI=taxonomy.SECURITY_PROJECT,
-                                    content=project_id,
-                                    name='project_id')
-            target.add_attachment(attach_val)
+        target = OpenStackResource(project_id=project_id, id=rid,
+                                   typeURI=type_uri, name=name)
 
         return target
 

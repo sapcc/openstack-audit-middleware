@@ -63,7 +63,6 @@ Additional options can be set::
 [filter:audit]
 paste.filter_factory = pycadf.middleware.audit:filter_factory
 audit_map_file = /etc/nova/api_audit_map.yaml
-service_name = test # opt to set HTTP_X_SERVICE_NAME environ variable
 # opt to ignore specific requests
 ignore_req_list = GET
 # turn on logging on request payloads

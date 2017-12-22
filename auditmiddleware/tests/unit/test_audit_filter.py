@@ -287,12 +287,9 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
 
-        scope_attachment = {'name': 'project_id',
-                            'typeURI': taxonomy.SECURITY_PROJECT,
-                            'content': pid}
-        self.assertIn(scope_attachment, event['target'][
-            'attachments'], "target attachment should contain target "
-                            "project_id for cross-project create actions")
+        self.assertEqual(pid, event['target']['project_id'],
+                         "target attachment should contain target "
+                         "project_id for cross-project create actions")
 
     def test_post_create_multiple_wrapped(self):
         items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i),
@@ -358,12 +355,10 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "compute/server",
                              items[idx]['id'], items[idx]['name'])
-            scope_attachment = {'name': 'project_id',
-                                'content': items[idx]['project_id'],
-                                'typeURI': taxonomy.SECURITY_PROJECT}
-            self.assertIn(scope_attachment, event['target']['attachments'],
-                          "target attachment should contain target "
-                          "project_id for cross-project create actions")
+            self.assertEqual(items[idx]['project_id'], event['target'][
+                'project_id'],
+                             "target attachment should contain target "
+                             "project_id for cross-project create actions")
             payload_content = req_json['servers'][idx]
             # make sure the excluded attribute is hidden
             payload_attachment = {'name': 'payload',
