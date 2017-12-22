@@ -9,7 +9,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
+import json
 import uuid
 
 from pycadf import cadftaxonomy as taxonomy
@@ -34,7 +34,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_get_list_child(self):
         rid = str(uuid.uuid4().hex)
-        # this property is modelled as custom action
+        # this property is modelled as singleton
         key = "os-volume_attachments"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res=key)
@@ -85,6 +85,29 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
                          "compute/server", rid)
+
+    def test_patch_custom_attr(self):
+        rid = str(uuid.uuid4().hex)
+        custom_value = {'child1': 'test', 'child2': 'test-two'}
+        # such API does not exist in Nova
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid)
+        request, response = self.build_api_call(
+            'PATCH', url,
+            req_json={'custom_attr2': custom_value},
+            resp_json={'custom_attr2': custom_value})
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
+                         "compute/server", rid)
+
+        # check custom attribute
+        custom_attachment = {'name': 'custom_attr2',
+                             'typeURI': '/data/compute/server/custom',
+                             'content': json.dumps(custom_value,
+                                                   separators=(',', ':'))}
+        self.assertIn(custom_attachment, event['attachments'],
+                      "attachment should contain custom_attr value")
 
     def test_delete(self):
         rid = str(uuid.uuid4().hex)
@@ -213,12 +236,33 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         rid = str(uuid.uuid4().hex)
         rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
-        request, response = self.build_api_call('POST', url, resp_json={
-            'id': rid, 'name': rname})
+        request, response = self.build_api_call(
+            'POST', url,
+            resp_json={'id': rid, 'name': rname})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
+
+    def test_post_create_rec_payload(self):
+        rid = str(uuid.uuid4().hex)
+        rname = 'server1'
+        url = self.build_url('servers', prefix='/v2/' + self.project_id)
+        payload_content = {'name': rname}
+        request, response = self.build_api_call(
+            'POST', url,
+            req_json=payload_content,
+            resp_json={'id': rid, 'name': rname})
+        event = self.build_event(request, response, record_payloads=True)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/server", rid, rname)
+        payload_attachment = {'name': 'payload',
+                              'content': json.dumps(payload_content,
+                                                    separators=(',', ':')),
+                              'typeURI': 'xs:string'}
+        self.assertIn(payload_attachment, event['attachments'],
+                      "event attachments should contain payload")
 
     def test_post_create_neutron_style(self):
         rid = str(uuid.uuid4().hex)
@@ -243,28 +287,49 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
 
-        scope_attachment = {'name': 'project_id',
-                            'typeURI': taxonomy.SECURITY_PROJECT,
-                            'content': pid}
-        self.assertIn(scope_attachment, event['target'][
-            'attachments'], "target attachment should contain target "
-                            "project_id for cross-project create actions")
+        self.assertEqual(pid, event['target']['project_id'],
+                         "target attachment should contain target "
+                         "project_id for cross-project create actions")
 
     def test_post_create_multiple_wrapped(self):
-        items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i)} for
-                 i in range(3)]
-
+        items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i),
+                  'custom_attr': 'custom-' + str(i),
+                  'hidden_attr': 'hidden-' + str(i)} for i in range(3)]
+        req_json = {"servers": [{
+            'name': x['name'],
+            'custom_attr': x['custom_attr'],
+            'hidden_attr': x['hidden_attr']}
+            for x in items]}
+        resp_json = {"servers": items}
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         # Note: this batch create call is made up. it does not exist in nova
-        request, response = self.build_api_call('POST', url, resp_json={
-            "servers": items})
+        request, response = self.build_api_call('POST', url,
+                                                req_json=req_json,
+                                                resp_json=resp_json)
 
-        events = self.build_event_list(request, response)
+        events = self.build_event_list(request, response, record_payloads=True)
 
         for idx, event in enumerate(events):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "compute/server",
                              items[idx]['id'], items[idx]['name'])
+            # check logged payload
+            payload_content = req_json['servers'][idx]
+            # make sure the excluded attribute is hidden
+            del payload_content['hidden_attr']
+            payload_attachment = {'name': 'payload',
+                                  'content': json.dumps(payload_content,
+                                                        separators=(',', ':')),
+                                  'typeURI': 'xs:string'}
+            self.assertIn(payload_attachment, event['attachments'],
+                          "event attachment should contain filtered payload "
+                          "copy")
+            # check custom attribute
+            custom_attachment = {'name': 'custom_attr',
+                                 'typeURI': 'xs:string',
+                                 'content': payload_content['custom_attr']}
+            self.assertIn(custom_attachment, event['attachments'],
+                          "attachment should contain custom_attr value")
 
     def test_post_create_multiple_cross_project_wrapped(self):
         """ test cross-project batch creation.
@@ -275,21 +340,33 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         # Note: this batch create call is made up. it does not exist in nova
-        request, response = self.build_api_call('POST', url, resp_json={
-            "servers": items})
+        req_json = {"servers": [{
+            'name': x['name'],
+            'project_id': x['project_id']}
+            for x in items]}
+        resp_json = {"servers": items}
+        request, response = self.build_api_call('POST', url,
+                                                req_json=req_json,
+                                                resp_json=resp_json)
 
-        events = self.build_event_list(request, response)
+        events = self.build_event_list(request, response, record_payloads=True)
 
         for idx, event in enumerate(events):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "compute/server",
                              items[idx]['id'], items[idx]['name'])
-            scope_attachment = {'name': 'project_id',
-                                'content': items[idx]['project_id'],
-                                'typeURI': taxonomy.SECURITY_PROJECT}
-            self.assertIn(scope_attachment, event['target']['attachments'],
-                          "target attachment should contain target "
-                          "project_id for cross-project create actions")
+            self.assertEqual(items[idx]['project_id'],
+                             event['target']['project_id'],
+                             "target attachment should contain target "
+                             "project_id for cross-project create actions")
+            payload_content = req_json['servers'][idx]
+            # make sure the excluded attribute is hidden
+            payload_attachment = {'name': 'payload',
+                                  'content': json.dumps(payload_content,
+                                                        separators=(',', ':')),
+                                  'typeURI': 'xs:string'}
+            self.assertIn(payload_attachment, event['attachments'],
+                          "event attachments should contain payload")
 
     def test_post_create_child(self):
         rid = str(uuid.uuid4().hex)
@@ -314,10 +391,12 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                 "rotation": 1
             }
         })
-        event = self.build_event(request, response)
+        event = self.build_event(request, response, record_payloads=True)
 
         self.check_event(request, response, event, "backup",
                          "compute/server", rid)
+        # no attachments should be produced on actions
+        self.assertNotIn("attachments", event)
 
     def test_post_action_default_mapping(self):
         url = self.build_url('os-services', prefix='/v2/' + self.project_id,

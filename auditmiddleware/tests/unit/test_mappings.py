@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -193,12 +194,17 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "network/port", rid, rname)
-        scope_attachment = {'name': 'project_id',
-                            'typeURI': taxonomy.SECURITY_PROJECT,
-                            'content': pid}
-        self.assertIn(scope_attachment, event['target']['attachments'],
-                      "target attachment should contain target project_id "
-                      "for cross-project create actions")
+        self.assertEqual(pid, event['target']['project_id'],
+                         "target attachment should contain target "
+                         "project_id for cross-project create actions")
+        # check custom attribute
+        custom_value = port_response['port']['security_groups']
+        custom_attachment = {'name': 'security_groups',
+                             'typeURI': 'network/security-groups',
+                             'content': json.dumps(custom_value,
+                                                   separators=(",", ":"))}
+        self.assertIn(custom_attachment, event['attachments'],
+                      "attachment should contain security_groups value")
 
     def test_post_create_namespaced(self):
         """ tests the use of singleton resources for namespace prefixes
@@ -254,8 +260,12 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
         url = self.build_url('networks', prefix='/v2.0')
         # Note: this batch create call is made up. it does not exist in nova
-        request, response = self.build_api_call('POST', url, resp_json={
-            "networks": items})
+        resp_json = {"networks": items}
+        req_json = {"networks": [{'name': 'name-' + str(i)}
+                    for i in range(3)]}
+        request, response = self.build_api_call('POST', url,
+                                                req_json=req_json,
+                                                resp_json=resp_json)
 
         events = self.build_event_list(request, response)
 
@@ -263,3 +273,60 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "network/network",
                              items[idx]['id'], items[idx]['name'])
+
+
+class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
+    def setUp(self):
+        super(CinderAuditMappingTest, self).setUp()
+
+        self.audit_map_file_fixture = "etc/cinder_audit_map.yaml"
+
+        self.audit_map_file_fixture = os.path.realpath(
+            self.audit_map_file_fixture)
+
+        self.service_name = 'cinder'
+        self.service_type = 'storage/volume'
+
+    @property
+    def audit_map(self):
+        return self.audit_map_file_fixture
+
+    def test_post_create_child(self):
+        rid = str(uuid.uuid4().hex)
+        child_rid = str(uuid.uuid4().hex)
+        url = self.build_url('types', prefix='/v3/' + self.project_id,
+                             res_id=rid, child_res="encryption")
+        resp = {"encryption": {
+                "volume_type_id": rid,
+                "control_location": "front-end",
+                "encryption_id": child_rid,
+                "key_size": 128, "provider": "luks",
+                "cipher": "aes-xts-plain64"}}
+
+        request, response = self.build_api_call('POST', url, resp_json=resp)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "storage/volume/type/encryption",
+                         target_id=child_rid)
+
+    def test_get_list_all_children(self):
+        url = self.build_url('types', prefix='/v3/' + self.project_id,
+                             child_res="os-volume-type-access")
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "storage/volume/type/project-acl", None,
+                         self.service_name)
+
+    def test_get_singleton_child(self):
+        rid = str(uuid.uuid4().hex)
+        # this property is modelled as custom action
+        url = self.build_url('types', prefix='/v3/' + self.project_id,
+                             res_id=rid, child_res="os-volume-type-access")
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "storage/volume/type/project-acl", rid)

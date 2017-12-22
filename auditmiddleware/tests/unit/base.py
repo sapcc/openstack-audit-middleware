@@ -36,6 +36,12 @@ resources:
             createBackup: backup
             confirmResize: update/resize-confirm
             detail: read/list/details
+        custom_attributes:
+            custom_attr: "xs:string"
+            custom_attr2: "/data/compute/server/custom"
+        payloads:
+            # hide this attribute from payload attachments
+            exclude: hidden_attr
         children:
             interfaces:
                 api_name: os-interface
@@ -48,6 +54,8 @@ resources:
                   'DELETE:*': 'delete/metadata/*'
             volume-attachments:
                 api_name: os-volume_attachments
+                payloads:
+                  enabled: false
             tags:
     os-services:
         # all default
@@ -108,13 +116,16 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             env_headers['REQUEST_METHOD'] = req_type
         return env_headers
 
-    def build_event(self, req, resp=None, middleware_cfg=None):
-        ev = self.build_event_list(req, resp, middleware_cfg)
+    def build_event(self, req, resp=None, middleware_cfg=None,
+                    record_payloads=False):
+        ev = self.build_event_list(req, resp, middleware_cfg, record_payloads)
         return ev[0] if ev else None
 
-    def build_event_list(self, req, resp=None, middleware_cfg=None):
+    def build_event_list(self, req, resp=None, middleware_cfg=None,
+                         record_payloads=False):
         cfg = middleware_cfg or self.audit_map
-        middleware = auditmiddleware._api.OpenStackAuditMiddleware(cfg)
+        middleware = auditmiddleware._api.OpenStackAuditMiddleware(
+            cfg, record_payloads)
         events = middleware.create_events(req, resp)
         return [e.as_dict() for e in events] if events else None
 
@@ -162,6 +173,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                     target_id=None,
                     target_name=None,
                     outcome="success"):
+
+        self.assertIsNotNone(event, "missing event")
         self.assertEqual(event['action'], action)
         self.assertEqual(event['typeURI'],
                          'http://schemas.dmtf.org/cloud/audit/1.0/event')

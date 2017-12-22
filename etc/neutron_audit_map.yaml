@@ -5,25 +5,6 @@ service_name: 'neutron'
 prefix: '/v2.0'
 
 resources:
-  networks:
-  ports:
-  segments:
-  trunks:
-  flavors:
-  floatingips:
-  network-ip-availabilities:
-  quotas:
-    custom_actions:
-      details: read/list/details
-  rbac-policies:
-  routers:
-  security-groups:
-  security-group-rules:
-    # does not have a name field, so let's use the description
-    custom_name: description
-  service-profiles:
-  subnetpools:
-  subnets:
   bgpvpn:
     # BPG VPNs namespace
     singleton: true
@@ -37,6 +18,8 @@ resources:
             type_uri: network/bgpvpn/router-associations
           port_associations:
             type_uri: network/bgpvpn/port-associations
+  flavors:
+  floatingips:
   fw:
     # FWaaS 1.0 namespace
     singleton: true
@@ -94,6 +77,14 @@ resources:
         type_uri: network/metering/labels
       metering-label-rules:
         type_uri: network/metering/label-rules
+  networks:
+  network-ip-availabilities:
+  ports:
+    custom_attributes:
+      security_groups: network/security-groups
+  quotas:
+    custom_actions:
+      details: read/list/details
   qos:
     # qos namespace
     singleton: true
@@ -107,6 +98,19 @@ resources:
           minimum_bandwidth_rules:
             type_uri: network/qos/minimum-bandwidth-rules
       rule-types:
+  rbac-policies:
+  routers:
+  security-groups:
+  security-group-rules:
+    # does not have a name field, so let's use the description
+    custom_name: description
+    custom_attributes:
+      security_rule_id: network/security-group-rule
+  segments:
+  service-profiles:
+  subnetpools:
+  subnets:
+  trunks:
   vpn:
     # VPNaaS 2.0 namespace
     singleton: true
