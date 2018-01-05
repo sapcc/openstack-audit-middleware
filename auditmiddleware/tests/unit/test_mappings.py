@@ -32,6 +32,37 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "compute/servers",
                          None, self.service_name)
 
+    def test_put_global_action(self):
+        url = self.build_url('os-services', prefix='/compute/v2.1',
+                             suffix="disable")
+        request, response = self.build_api_call('PUT', url, req_json={
+            "host": "ignored anyway",
+            "binary": "ignored too"
+        })
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, "disable",
+                         "compute/services", None,
+                         self.service_name)
+
+    def test_put_global_key(self):
+        url = self.build_url('os-services', prefix='/compute/v2.1',
+                             suffix="force-down")
+        request, response = self.build_api_call('PUT', url, req_json={
+            "host": "ignored anyway",
+            "binary": "ignored too"
+        })
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, "update",
+                         "compute/services", None,
+                         self.service_name)
+        key_attachment = {'name': 'key',
+                          'typeURI': 'xs:string',
+                          'content': 'force-down'}
+        self.assertIn(key_attachment, event['target']['attachments'],
+                      "attachment should contain key force-down")
+
 
 class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
@@ -262,7 +293,7 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
         # Note: this batch create call is made up. it does not exist in nova
         resp_json = {"networks": items}
         req_json = {"networks": [{'name': 'name-' + str(i)}
-                    for i in range(3)]}
+                                 for i in range(3)]}
         request, response = self.build_api_call('POST', url,
                                                 req_json=req_json,
                                                 resp_json=resp_json)
@@ -297,11 +328,11 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
         url = self.build_url('types', prefix='/v3/' + self.project_id,
                              res_id=rid, child_res="encryption")
         resp = {"encryption": {
-                "volume_type_id": rid,
-                "control_location": "front-end",
-                "encryption_id": child_rid,
-                "key_size": 128, "provider": "luks",
-                "cipher": "aes-xts-plain64"}}
+            "volume_type_id": rid,
+            "control_location": "front-end",
+            "encryption_id": child_rid,
+            "key_size": 128, "provider": "luks",
+            "cipher": "aes-xts-plain64"}}
 
         request, response = self.build_api_call('POST', url, resp_json=resp)
         event = self.build_event(request, response)

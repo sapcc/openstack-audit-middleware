@@ -48,17 +48,12 @@ resources:
                 custom_id: port_id
             metadata:
                 singleton: true
-                custom_actions:
-                  'GET:*': 'read/metadata/*'
-                  'PUT:*': 'update/metadata/*'
-                  'DELETE:*': 'delete/metadata/*'
+                type_name: meta
             volume-attachments:
                 api_name: os-volume_attachments
                 payloads:
                   enabled: false
             tags:
-    os-services:
-        # all default
     # pseudo resource representing a namespace
     mynamespace:
       singleton: true
@@ -209,7 +204,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         # TODO check observer
         self.assertEqual(event['requestPath'], request.path)
 
-    def build_url(self, res, host_url=None, prefix='', action=None,
+    def build_url(self, res, host_url=None, prefix='', suffix=None,
                   res_id=None,
                   child_res=None, child_res_id=None):
         url = host_url if host_url else 'http://admin_host:8774' + prefix
@@ -217,6 +212,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         url += '/' + res_id if res_id else ''
         url += '/' + child_res if child_res else ''
         url += '/' + child_res_id if child_res_id else ''
-        url += '/' + action if action else ''
+        url += '/' + suffix if suffix else ''
 
         return url

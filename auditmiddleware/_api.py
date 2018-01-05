@@ -21,14 +21,12 @@ import six
 import yaml
 from oslo_log import log as logging
 from pycadf import cadftaxonomy as taxonomy
-from pycadf import endpoint
 from pycadf import cadftype
 from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
 from pycadf import resource
 from pycadf.attachment import Attachment
-
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -137,13 +135,13 @@ class OpenStackAuditMiddleware(object):
 
             rest_name = spec.get('api_name', name)
             singleton = spec.get('singleton', False)
-            type_name = name.replace('-', '_')
+            type_name = spec.get('type_name', name.replace('-', '_'))
             type_uri = spec.get('type_uri', pfx + "/" + name)
             el_type_name = None
             el_type_uri = None
             childs_parent_type_uri = None
             if not singleton:
-                el_type_name = type_name[:-1]
+                el_type_name = spec.get('el_type_name', type_name[:-1])
                 el_type_uri = type_uri[:-1]
                 childs_parent_type_uri = el_type_uri
             else:
@@ -233,7 +231,7 @@ class OpenStackAuditMiddleware(object):
                                           path, next_pos)
 
             if next_pos == -1:
-                # this must be an action
+                # this must be an action or a key
                 ev = self._create_cadf_event(target_project, res_spec, res_id,
                                              res_parent_id, request,
                                              response, token)
@@ -330,11 +328,18 @@ class OpenStackAuditMiddleware(object):
         return ev
 
     def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
-                           request, response, action_suffix):
-        action = self._get_action(res_spec, res_id, request, action_suffix)
+                           request, response, suffix):
+        action = self._get_action(res_spec, res_id, request, suffix)
+        key = None
         if not action:
-            # skip if action filtered out
-            return
+            # ignored unknown actions
+            if suffix == 'action':
+                return None
+
+            # suffix must be a key
+            key = suffix
+            # determine action from method (never None)
+            action = self._get_action(res_spec, res_id, request, None)
 
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
         domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
@@ -364,10 +369,11 @@ class OpenStackAuditMiddleware(object):
         target = None
         if res_id or res_parent_id:
             target = self._create_target_resource(project, res_spec, res_id,
-                                                  res_parent_id)
+                                                  res_parent_id, key=key)
         else:
             target = self._create_target_resource(project, res_spec,
-                                                  None, self._service_id)
+                                                  None, self._service_id,
+                                                  key=key)
             target.name = self._service_name
 
         observer = self._create_observer_resource(request)
@@ -381,6 +387,16 @@ class OpenStackAuditMiddleware(object):
             reason=event_reason,
             target=target)
         event.requestPath = request.path_qs
+
+        #
+        if key and request.method[0] == 'P' and self._payloads_enabled and \
+           res_spec.payloads['enabled']:
+            req_pl = request.json
+            # remove possible wrapper elements
+            req_pl = req_pl.get(res_spec.el_type_name, req_pl)
+            attach_val = self._create_payload_attachment(req_pl,
+                                                         res_spec)
+            event.add_attachment(attach_val)
 
         # TODO add reporter step again?
         # event.add_reporterstep(
@@ -417,7 +433,7 @@ class OpenStackAuditMiddleware(object):
         return attach_val
 
     def _create_target_resource(self, target_project, res_spec, res_id,
-                                res_parent_id=None, payload=None):
+                                res_parent_id=None, payload=None, key=None):
         """ builds a target resource from payload
         """
         project_id = target_project
@@ -437,6 +453,10 @@ class OpenStackAuditMiddleware(object):
         target = OpenStackResource(project_id=project_id, id=rid,
                                    typeURI=type_uri, name=name)
 
+        if key:
+            target.add_attachment(Attachment(typeURI="xs:string",
+                                             content=key, name='key'))
+
         return target
 
     def _create_observer_resource(self, req):
@@ -447,7 +467,7 @@ class OpenStackAuditMiddleware(object):
 
         return observer
 
-    def _get_action(self, res_spec, res_id, request, action_suffix):
+    def _get_action(self, res_spec, res_id, request, suffix):
         """Given a resource spec, a request and a path suffix, deduct
         the correct CADF action.
 
@@ -472,10 +492,10 @@ class OpenStackAuditMiddleware(object):
 
         """
         method = request.method
-        if action_suffix is None:
+        if suffix is None:
             return self._map_method_to_action(method, res_spec, res_id)
 
-        return self._map_action_suffix(res_spec, action_suffix, method,
+        return self._map_action_suffix(res_spec, suffix, method,
                                        res_id, request)
 
     def _map_method_to_action(self, method, res_spec, res_id):
@@ -520,15 +540,8 @@ class OpenStackAuditMiddleware(object):
         if action is not None and action is not '':
             return action.replace('*', rest_action)
 
-        # use defaults if no custom action mapping exists
-        if not res_spec.custom_actions:
-            # if there are no custom_actions defined, we will just ...
-            return (self._map_method_to_action(method, res_spec, res_id) +
-                    "/" + rest_action)
-        else:
-            self._log.debug("action %s is filtered out (%s)", rest_action,
-                            request.path)
-            return None
+        # no action mapped to suffix
+        return None
 
     @staticmethod
     def _build_service_id(name):

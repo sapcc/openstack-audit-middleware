@@ -192,31 +192,39 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
                          "compute/server/metadata", rid)
 
-    def test_put_singleton_child_update_action(self):
+    def test_put_singleton_key(self):
         rid = str(uuid.uuid4().hex)
         key = "server_meta_key"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res="metadata",
-                             action="server_meta_key")
+                             suffix=key)
         request, response = self.build_api_call('PUT', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
-                         "/metadata/" + key,
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
                          "compute/server/metadata", rid)
+        key_attachment = {'name': 'key',
+                          'typeURI': 'xs:string',
+                          'content': key}
+        self.assertIn(key_attachment, event['target']['attachments'],
+                      "attachment should contain key " + key)
 
-    def test_put_singleton_child_delete_action(self):
+    def test_delete_singleton_key(self):
         rid = str(uuid.uuid4().hex)
         key = "server_meta_key"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res="metadata",
-                             action="server_meta_key")
+                             suffix="server_meta_key")
         request, response = self.build_api_call('DELETE', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_DELETE +
-                         "/metadata/" + key,
+        self.check_event(request, response, event, taxonomy.ACTION_DELETE,
                          "compute/server/metadata", rid)
+        key_attachment = {'name': 'key',
+                          'typeURI': 'xs:string',
+                          'content': key}
+        self.assertIn(key_attachment, event['target']['attachments'],
+                      "attachment should contain key " + key)
 
     def test_get_singleton_child_read_action(self):
         rid = str(uuid.uuid4().hex)
@@ -224,13 +232,17 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         key = "server_meta_key"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res="metadata",
-                             action="server_meta_key")
+                             suffix=key)
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_READ +
-                         "/metadata/" + key,
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
                          "compute/server/metadata", rid)
+        key_attachment = {'name': 'key',
+                          'typeURI': 'xs:string',
+                          'content': key}
+        self.assertIn(key_attachment, event['target']['attachments'],
+                      "attachment should contain key " + key)
 
     def test_post_create(self):
         rid = str(uuid.uuid4().hex)
@@ -383,7 +395,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def test_post_action(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             action="action", res_id=rid)
+                             suffix="action", res_id=rid)
         request, response = self.build_api_call('POST', url, req_json={
             "createBackup": {
                 "name": "Backup 1",
@@ -398,23 +410,36 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         # no attachments should be produced on actions
         self.assertNotIn("attachments", event)
 
-    def test_post_action_default_mapping(self):
-        url = self.build_url('os-services', prefix='/v2/' + self.project_id,
-                             action="disable")
-        request, response = self.build_api_call('PUT', url, req_json={
-            "host": "ignored anyway",
-            "binary": "ignored too"
-        })
-        event = self.build_event(request, response)
+    def test_put_key(self):
+        rid = str(uuid.uuid4().hex)
+        key = "somekey"
+        payload_content = {"meta": {key: "ignored here"}}
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             suffix=key, res_id=rid,
+                             child_res="metadata")
+        request, response = self.build_api_call('PUT', url,
+                                                req_json=payload_content)
+        event = self.build_event(request, response, record_payloads=True)
 
-        self.check_event(request, response, event, "update/disable",
-                         "compute/os-services", None,
-                         self.service_name)
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
+                         "compute/server/metadata", rid)
+        key_attachment = {'name': 'key',
+                          'typeURI': 'xs:string',
+                          'content': key}
+        self.assertIn(key_attachment, event['target']['attachments'],
+                      "attachment should contain key " + key)
+        # ensure that for key updates also payload recording takes place
+        payload_attachment = {'name': 'payload',
+                              'content': json.dumps(payload_content,
+                                                    separators=(',', ':')),
+                              'typeURI': 'xs:string'}
+        self.assertIn(payload_attachment, event['attachments'],
+                      "event attachments should contain payload")
 
     def test_post_action_missing_payload(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             action="action", res_id=rid)
+                             suffix="action", res_id=rid)
         request, response = self.build_api_call('POST', url)
         event = self.build_event(request, response)
 
@@ -424,8 +449,9 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def test_post_action_filtered(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             action="unknown_action", res_id=rid)
-        request, response = self.build_api_call('POST', url, req_json={})
+                             suffix="action", res_id=rid)
+        request, response = self.build_api_call('POST', url,
+                                                req_json={"unknown": "bla"})
         event = self.build_event(request, response)
 
         self.assertIsNone(event, "unknown actions should be ignored if a "
@@ -434,7 +460,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def test_post_resource_filtered(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             action="unknown_action", res_id=rid,
+                             suffix="unknown_action", res_id=rid,
                              child_res_id="unknown")
         request, response = self.build_api_call('POST', url, req_json={})
         event = self.build_event(request, response)
@@ -451,7 +477,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def test_post_action_no_response(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             action="action", res_id=rid)
+                             suffix="action", res_id=rid)
         request, response = self.build_api_call('POST', url, req_json={
             "confirmResize": None})
         event = self.build_event(request, response)
@@ -461,7 +487,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_get_service_action(self):
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             action="detail")
+                             suffix="detail")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 

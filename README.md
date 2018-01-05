@@ -151,6 +151,11 @@ Example (Nova)::
           security_groups: compute/server/security-groups
         # child resources, placed after the parent resource ID in the URL path
         children:
+          metadata:
+            # singleton of keys
+            singleton: True
+            # wrapped in a JSON element named "meta"
+            type_name: meta
           migrations:
             # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
             # type_uri: compute/server/migrations
