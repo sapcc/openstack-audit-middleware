@@ -153,7 +153,7 @@ Example (Nova)::
         children:
           metadata:
             # singleton of keys
-            singleton: True
+            singleton: true
             # wrapped in a JSON element named "meta"
             type_name: meta
           migrations:

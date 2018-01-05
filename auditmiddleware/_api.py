@@ -35,12 +35,16 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
                                        'custom_actions', 'custom_attributes',
                                        'children', 'payloads'])
 
-method_taxonomy_map = {'GET': taxonomy.ACTION_READ,
-                       'HEAD': taxonomy.ACTION_READ, 'PUT':
-                           taxonomy.ACTION_UPDATE,
-                       'PATCH': taxonomy.ACTION_UPDATE, 'POST':
-                           taxonomy.ACTION_CREATE,
-                       'DELETE': taxonomy.ACTION_DELETE}
+method_action_map = {'GET': taxonomy.ACTION_READ,
+                     'HEAD': taxonomy.ACTION_READ,
+                     'PUT': taxonomy.ACTION_UPDATE,
+                     'PATCH': taxonomy.ACTION_UPDATE, 'POST':
+                         taxonomy.ACTION_CREATE,
+                     'DELETE': taxonomy.ACTION_DELETE}
+action_suffix_map = {taxonomy.ACTION_READ: '/get',
+                     taxonomy.ACTION_UPDATE: '/set',
+                     taxonomy.ACTION_CREATE: '/put',
+                     taxonomy.ACTION_DELETE: '/unset'}
 
 # matcher for UUIDs
 _UUID_RE = re.compile("[0-9a-f\-]+$")
@@ -135,7 +139,7 @@ class OpenStackAuditMiddleware(object):
 
             rest_name = spec.get('api_name', name)
             singleton = spec.get('singleton', False)
-            type_name = spec.get('type_name', name.replace('-', '_'))
+            type_name = spec.get('type_name', rest_name.replace('-', '_'))
             type_uri = spec.get('type_uri', pfx + "/" + name)
             el_type_name = None
             el_type_uri = None
@@ -251,7 +255,8 @@ class OpenStackAuditMiddleware(object):
             res_payload = response.json
 
             # check for bulk-operation
-            if not res_spec.singleton and res_spec.type_name in res_payload:
+            if not res_spec.singleton and \
+               isinstance(res_payload.get(res_spec.type_name), list):
                 # payloads contain an attribute named like the resource
                 # which contains a list of items
                 events = []
@@ -340,6 +345,7 @@ class OpenStackAuditMiddleware(object):
             key = suffix
             # determine action from method (never None)
             action = self._get_action(res_spec, res_id, request, None)
+            action += action_suffix_map[action]
 
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
         domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
@@ -390,7 +396,7 @@ class OpenStackAuditMiddleware(object):
 
         #
         if key and request.method[0] == 'P' and self._payloads_enabled and \
-           res_spec.payloads['enabled']:
+                res_spec.payloads['enabled']:
             req_pl = request.json
             # remove possible wrapper elements
             req_pl = req_pl.get(res_spec.el_type_name, req_pl)
@@ -510,7 +516,7 @@ class OpenStackAuditMiddleware(object):
         elif method == "PATCH":
             return taxonomy.ACTION_UPDATE
 
-        return method_taxonomy_map[method]
+        return method_action_map[method]
 
     def _map_action_suffix(self, res_spec, action_suffix, method, res_id,
                            request):

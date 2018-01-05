@@ -86,7 +86,7 @@ resources:
             migrate: update/migrate
             os-getConsoleOutput: read/console
             os-migrateLive: update/migrate/live
-            os-resetState: update/set/state
+            os-resetState: update/set/status
             os-start: start
             os-stop: stop
             pause: disable/pause

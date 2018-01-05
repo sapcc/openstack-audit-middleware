@@ -201,7 +201,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('PUT', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
+        self.check_event(request, response, event,
+                         taxonomy.ACTION_UPDATE + "/set",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -218,7 +219,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('DELETE', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_DELETE,
+        self.check_event(request, response, event,
+                         taxonomy.ACTION_DELETE + "/unset",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -226,7 +228,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertIn(key_attachment, event['target']['attachments'],
                       "attachment should contain key " + key)
 
-    def test_get_singleton_child_read_action(self):
+    def test_get_singleton_child_read_key(self):
         rid = str(uuid.uuid4().hex)
         # this property is modelled as custom action
         key = "server_meta_key"
@@ -236,7 +238,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_READ,
+        self.check_event(request, response, event,
+                         taxonomy.ACTION_READ + "/get",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -421,7 +424,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=payload_content)
         event = self.build_event(request, response, record_payloads=True)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/set",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',

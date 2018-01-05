@@ -54,8 +54,8 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         })
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, "update",
-                         "compute/services", None,
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/set", "compute/services", None,
                          self.service_name)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -337,8 +337,9 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url, resp_json=resp)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "storage/volume/type/encryption",
+        self.check_event(request, response, event,
+                         taxonomy.ACTION_CREATE,
+                         "storage/volume/type/encryption-type",
                          target_id=child_rid)
 
     def test_get_list_all_children(self):
