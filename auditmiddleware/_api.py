@@ -29,6 +29,7 @@ from pycadf import reason
 from pycadf import resource
 from pycadf.attachment import Attachment
 
+
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
                                        'type_uri', 'el_type_uri', 'singleton',
