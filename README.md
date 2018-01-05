@@ -57,14 +57,19 @@ audit_map_file = /etc/nova/api_audit_map.yaml
 For each supported OpenStack services, a mapping file named
 _\<service\>\_api\_audit\_map.yaml_ is included in the _etc_ folder of this repo.
 
-Additional options can be set::
+Additional options can be set:
+
+Certain types of HTTP requests can be ignored entirely. Typically GET and HEAD
+requests should not cause the creation of an audit events due to sheer volume.
 
 ```
-[filter:audit]
-paste.filter_factory = pycadf.middleware.audit:filter_factory
-audit_map_file = /etc/nova/api_audit_map.yaml
-# opt to ignore specific requests
-ignore_req_list = GET
+# ignore any GET or HEAD requests
+ignore_req_list = GET, HEAD
+```
+
+The payload of the API response to CRUD request can be attached to the event as an option. This will increase the size of the events, but brings a lot of value when it comes to diagnostics. Sensitive information can be filtered out using the `payloads` attribute of the resource mapping specification (see below).
+
+```
 # turn on logging on request payloads
 record_payloads = True
 ```
@@ -153,11 +158,28 @@ Example (Nova)::
               el_type_uri: compute/server/migration
           os-interfaces:
             # for some reason Nova does not use plural for the os-interfaces of a server
-            rest_name: 'os-interface'
+            api_name: 'os-interface'
             # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
             custom_id: port_id
           os-server-password:
             # this is an attribute, so there is only a single resource per parent
             # that means no pluralization of the resource name in the URL and no ID
             singleton: true
+            # when record_payloads is True, this section controls with
+            # attributes of the response payload are part of the 'payloads' attachment 
+            payloads:
+              # never record payloads for the os-server-password resource
+              enabled: False
+    flavors:
+      payloads:
+        exclude:
+          # filter lengthy fields with no real diagnostic value
+          - description
+          - links
+        # include:
+        # # use white-list approach when most fields are irrelevant or sensitive
+        #   - name
+        #   - id
+        #   - ram
+        #   - disk
 ```
