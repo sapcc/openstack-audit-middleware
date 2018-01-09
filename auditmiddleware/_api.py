@@ -214,7 +214,7 @@ class OpenStackAuditMiddleware(object):
             res_spec = res_spec.get(token)
             if res_spec is None:
                 # no such name, ignore/filter the resource
-                self._log.info("unknown resource: %s", token)
+                self._log.debug("unknown resource: %s", token)
 
                 return None
 
@@ -568,7 +568,7 @@ class OpenStackAuditMiddleware(object):
             return action.replace('*', rest_action)
 
         # no action mapped to suffix
-        self._log.info("unknown action: %s", rest_action)
+        self._log.debug("unknown action: %s", rest_action)
         return None
 
     @staticmethod

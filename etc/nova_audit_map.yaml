@@ -60,6 +60,12 @@ resources:
         custom_id: name
     migrations:
         api_name: os-migrations
+    server-external-events:
+        api_name: os-server-external-events
+        custom_attributes:
+          server_uuid: compute/server
+          status: xs:string
+          tag: xs:string
     quota-sets:
         api_name: os-quota-sets
         el_type_uri: compute/quota

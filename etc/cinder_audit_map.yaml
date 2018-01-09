@@ -150,6 +150,7 @@ resources:
       os-reset_status: update/set/status
       os-retype: update/retype
       os-set_bootable: update/set/bootable
+      os-terminate_connection: update/terminate-connection
       os-volume_upload_image: capture/image
       # warning: odd API design
       os-set_image_metadata: update/set/metadata
