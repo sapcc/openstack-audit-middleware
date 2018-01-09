@@ -214,6 +214,8 @@ class OpenStackAuditMiddleware(object):
             res_spec = res_spec.get(token)
             if res_spec is None:
                 # no such name, ignore/filter the resource
+                self._log.info("unknown resource: %s", token)
+
                 return None
 
             return self._build_events(target_project, res_spec, None, None,
@@ -544,6 +546,8 @@ class OpenStackAuditMiddleware(object):
                 if payload:
                     rest_action = next(iter(payload))
                 else:
+                    self._log.warning("/action URL without payload: %s",
+                                      request.path)
                     return None
             except ValueError:
                 self._log.warning(
@@ -564,6 +568,7 @@ class OpenStackAuditMiddleware(object):
             return action.replace('*', rest_action)
 
         # no action mapped to suffix
+        self._log.info("unknown action: %s", rest_action)
         return None
 
     @staticmethod
