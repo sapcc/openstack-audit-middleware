@@ -205,7 +205,7 @@ class OpenStackAuditMiddleware(object):
         if next_pos != -1:
             # that means there are more path segments
             token = path[cursor + 1:next_pos]
-        else:
+        elif (cursor + 1) < len(path):
             token = path[cursor + 1:]
 
         # handle the current token
@@ -238,10 +238,9 @@ class OpenStackAuditMiddleware(object):
 
             if next_pos == -1:
                 # this must be an action or a key
-                ev = self._create_cadf_event(target_project, res_spec, res_id,
-                                             res_parent_id, request,
-                                             response, token)
-                return [ev] if ev else None
+                return self._create_events(target_project, res_id,
+                                           res_parent_id, res_spec, request,
+                                           response, token)
 
         self._log.warning(
             "Unexpected continuation of resource path after segment %s: %s",
@@ -250,7 +249,8 @@ class OpenStackAuditMiddleware(object):
 
     def _create_events(self, target_project, res_id,
                        res_parent_id,
-                       res_spec, request, response):
+                       res_spec, request, response, suffix=None):
+        # check for update operations
         if request.method[0] == 'P' and response \
                 and response.content_length > 0 \
                 and response.content_type == "application/json":
@@ -269,16 +269,16 @@ class OpenStackAuditMiddleware(object):
                                                          res_id,
                                                          res_parent_id,
                                                          request, response,
-                                                         subpayload)
+                                                         subpayload, suffix)
                     events.append(ev)
 
-                # attach payload if configured
+                # attach payload if configured for bulk-operation
                 if self._payloads_enabled and res_spec.payloads['enabled']:
-                    req_pl = request.json[res_spec.type_name]
+                    req_pl = request.json.get(res_spec.type_name)
                     i = 0
                     for pl in req_pl:
-                        attach_val = self._create_payload_attachment(pl,
-                                                                     res_spec)
+                        attach_val = self._create_payload_attachment(
+                            pl, res_spec)
                         events[i].add_attachment(attach_val)
                         i += 1
 
@@ -293,7 +293,7 @@ class OpenStackAuditMiddleware(object):
                                                         res_id,
                                                         res_parent_id,
                                                         request, response,
-                                                        res_payload)
+                                                        res_payload, suffix)
 
                 # attach payload if configured
                 if self._payloads_enabled and res_spec.payloads['enabled']:
@@ -308,16 +308,21 @@ class OpenStackAuditMiddleware(object):
         else:
             event = self._create_cadf_event(target_project, res_spec, res_id,
                                             res_parent_id,
-                                            request, response, None)
-            return [event]
+                                            request, response, suffix)
+            if event and request.method[0] == 'P' \
+               and self._payloads_enabled and res_spec.payloads['enabled']:
+                event.add_attachment(self._create_payload_attachment(
+                    request.json, res_spec))
+
+            return [event] if event else []
 
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
-                                   subpayload):
+                                   subpayload, suffix=None):
         self._log.debug("create event from payload:\n%s", subpayload)
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
-                                     response, None)
+                                     response, suffix)
         ev.target = self._create_target_resource(target_project, res_spec,
                                                  res_id, res_parent_id,
                                                  subpayload)

@@ -253,11 +253,12 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         request, response = self.build_api_call(
             'POST', url,
-            resp_json={'id': rid, 'name': rname})
+            resp_json={'server': {'id': rid, 'name': rname}})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
+        self.assertEqual(rid, event['target']['id'])
 
     def test_post_create_rec_payload(self):
         rid = str(uuid.uuid4().hex)
@@ -399,19 +400,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
-        request, response = self.build_api_call('POST', url, req_json={
-            "createBackup": {
-                "name": "Backup 1",
-                "backup_type": "daily",
-                "rotation": 1
-            }
-        })
+        req_json = {
+            "createBackup": {"name": "Backup 1", "backup_type": "daily",
+                             "rotation": 1}}
+        request, response = self.build_api_call('POST', url, req_json=req_json)
         event = self.build_event(request, response, record_payloads=True)
 
         self.check_event(request, response, event, "backup",
                          "compute/server", rid)
-        # no attachments should be produced on actions
-        self.assertNotIn("attachments", event)
+        # attachments should be produced on actions
+        self.assertIn("attachments", event)
+        self.assertEqual(json.loads(event['attachments'][0]['content']),
+                         req_json)
 
     def test_put_key(self):
         rid = str(uuid.uuid4().hex)
