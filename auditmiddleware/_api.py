@@ -270,7 +270,8 @@ class OpenStackAuditMiddleware(object):
                                                          res_parent_id,
                                                          request, response,
                                                          subpayload, suffix)
-                    events.append(ev)
+                    if ev:
+                        events.append(ev)
 
                 # attach payload if configured for bulk-operation
                 if self._payloads_enabled and res_spec.payloads['enabled']:
@@ -295,6 +296,9 @@ class OpenStackAuditMiddleware(object):
                                                         request, response,
                                                         res_payload, suffix)
 
+                if not event:
+                    return []
+
                 # attach payload if configured
                 if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = request.json
@@ -309,12 +313,15 @@ class OpenStackAuditMiddleware(object):
             event = self._create_cadf_event(target_project, res_spec, res_id,
                                             res_parent_id,
                                             request, response, suffix)
+            if not event:
+                return []
+
             if event and request.method[0] == 'P' \
                and self._payloads_enabled and res_spec.payloads['enabled']:
                 event.add_attachment(self._create_payload_attachment(
                     request.json, res_spec))
 
-            return [event] if event else []
+            return [event]
 
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
@@ -323,6 +330,9 @@ class OpenStackAuditMiddleware(object):
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, suffix)
+        if not ev:
+            return None
+
         ev.target = self._create_target_resource(target_project, res_spec,
                                                  res_id, res_parent_id,
                                                  subpayload)
