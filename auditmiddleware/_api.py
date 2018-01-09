@@ -66,8 +66,10 @@ class ConfigError(Exception):
 class OpenStackResource(resource.Resource):
     def __init__(self, project_id=None, domain_id=None, **kwargs):
         super(OpenStackResource, self).__init__(**kwargs)
-        self.project_id = project_id
-        self.domain_id = domain_id
+        if project_id:
+            self.project_id = project_id
+        if domain_id:
+            self.domain_id = domain_id
 
 
 def str_map(param):

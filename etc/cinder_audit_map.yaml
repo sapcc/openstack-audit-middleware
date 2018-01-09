@@ -3,7 +3,6 @@ service_name: 'cinder'
 
 # capture the target project (e.g. for cross-project calls)
 prefix: '/v[0-9\.]*/(?P<project_id>[0-9a-f\-]+)'
-# devstack: prefix: '/v3'
 
 resources:
   attachments:
