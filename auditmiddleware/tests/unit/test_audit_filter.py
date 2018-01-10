@@ -276,7 +276,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         payload_attachment = {'name': 'payload',
                               'content': json.dumps(payload_content,
                                                     separators=(',', ':')),
-                              'typeURI': 'xs:string'}
+                              'typeURI': 'mime:application/json'}
         self.assertIn(payload_attachment, event['attachments'],
                       "event attachments should contain payload")
 
@@ -336,7 +336,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             payload_attachment = {'name': 'payload',
                                   'content': json.dumps(payload_content,
                                                         separators=(',', ':')),
-                                  'typeURI': 'xs:string'}
+                                  'typeURI': 'mime:application/json'}
             self.assertIn(payload_attachment, event['attachments'],
                           "event attachment should contain filtered payload "
                           "copy")
@@ -380,7 +380,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             payload_attachment = {'name': 'payload',
                                   'content': json.dumps(payload_content,
                                                         separators=(',', ':')),
-                                  'typeURI': 'xs:string'}
+                                  'typeURI': 'mime:application/json'}
             self.assertIn(payload_attachment, event['attachments'],
                           "event attachments should contain payload")
 
@@ -436,7 +436,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         payload_attachment = {'name': 'payload',
                               'content': json.dumps(payload_content,
                                                     separators=(',', ':')),
-                              'typeURI': 'xs:string'}
+                              'typeURI': 'mime:application/json'}
         self.assertIn(payload_attachment, event['attachments'],
                       "event attachments should contain payload")
 

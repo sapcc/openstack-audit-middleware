@@ -450,7 +450,7 @@ class OpenStackAuditMiddleware(object):
         else:
             res_payload = payload
 
-        attach_val = Attachment(typeURI="xs:string",
+        attach_val = Attachment(typeURI="mime:application/json",
                                 content=json.dumps(res_payload,
                                                    separators=(',', ':')),
                                 name='payload')
