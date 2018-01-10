@@ -253,11 +253,12 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         request, response = self.build_api_call(
             'POST', url,
-            resp_json={'id': rid, 'name': rname})
+            resp_json={'server': {'id': rid, 'name': rname}})
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
+        self.assertEqual(rid, event['target']['id'])
 
     def test_post_create_rec_payload(self):
         rid = str(uuid.uuid4().hex)
@@ -275,7 +276,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         payload_attachment = {'name': 'payload',
                               'content': json.dumps(payload_content,
                                                     separators=(',', ':')),
-                              'typeURI': 'xs:string'}
+                              'typeURI': 'mime:application/json'}
         self.assertIn(payload_attachment, event['attachments'],
                       "event attachments should contain payload")
 
@@ -335,7 +336,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             payload_attachment = {'name': 'payload',
                                   'content': json.dumps(payload_content,
                                                         separators=(',', ':')),
-                                  'typeURI': 'xs:string'}
+                                  'typeURI': 'mime:application/json'}
             self.assertIn(payload_attachment, event['attachments'],
                           "event attachment should contain filtered payload "
                           "copy")
@@ -379,7 +380,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             payload_attachment = {'name': 'payload',
                                   'content': json.dumps(payload_content,
                                                         separators=(',', ':')),
-                                  'typeURI': 'xs:string'}
+                                  'typeURI': 'mime:application/json'}
             self.assertIn(payload_attachment, event['attachments'],
                           "event attachments should contain payload")
 
@@ -399,19 +400,18 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
-        request, response = self.build_api_call('POST', url, req_json={
-            "createBackup": {
-                "name": "Backup 1",
-                "backup_type": "daily",
-                "rotation": 1
-            }
-        })
+        req_json = {
+            "createBackup": {"name": "Backup 1", "backup_type": "daily",
+                             "rotation": 1}}
+        request, response = self.build_api_call('POST', url, req_json=req_json)
         event = self.build_event(request, response, record_payloads=True)
 
         self.check_event(request, response, event, "backup",
                          "compute/server", rid)
-        # no attachments should be produced on actions
-        self.assertNotIn("attachments", event)
+        # attachments should be produced on actions
+        self.assertIn("attachments", event)
+        self.assertEqual(json.loads(event['attachments'][0]['content']),
+                         req_json)
 
     def test_put_key(self):
         rid = str(uuid.uuid4().hex)
@@ -436,7 +436,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         payload_attachment = {'name': 'payload',
                               'content': json.dumps(payload_content,
                                                     separators=(',', ':')),
-                              'typeURI': 'xs:string'}
+                              'typeURI': 'mime:application/json'}
         self.assertIn(payload_attachment, event['attachments'],
                       "event attachments should contain payload")
 
@@ -450,16 +450,15 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertIsNone(event, "malformed ./action with no payload should "
                                  "be ignored")
 
-    def test_post_action_filtered(self):
+    def test_post_undefined_action_generic(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
         request, response = self.build_api_call('POST', url,
                                                 req_json={"unknown": "bla"})
         event = self.build_event(request, response)
-
-        self.assertIsNone(event, "unknown actions should be ignored if a "
-                                 "mapping was declared")
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/unknown", "compute/server", rid)
 
     def test_post_resource_filtered(self):
         rid = str(uuid.uuid4().hex)

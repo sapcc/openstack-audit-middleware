@@ -46,10 +46,11 @@ class _MessagingNotifier(Thread):
 
     def enqueue_notification(self, payload, context):
         try:
+            self._log.debug("enqueue event: %s", payload.get("id"))
             self._queue.put((payload, context), timeout=1)
             sz = self._queue.qsize()
             u = sz * 100 / self._queue_capacity
-            if u >= 10 and u % 10 == 0:
+            if sz > 1 and u >= 10 and u % 10 == 0:
                 self._log.debug("backlog: queue size reached %d items ("
                                 "capacity: %d items)", sz,
                                 self._queue_capacity)
@@ -72,6 +73,7 @@ class _MessagingNotifier(Thread):
             try:
                 payload, context = self._queue.get()
                 self._notifier.info(context, "audit.cadf", payload)
+                self._log.debug("Push event: %s", payload.get("id"))
             except queue.Empty:
                 # ignore
                 pass

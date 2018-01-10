@@ -113,8 +113,22 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
     def build_event(self, req, resp=None, middleware_cfg=None,
                     record_payloads=False):
-        ev = self.build_event_list(req, resp, middleware_cfg, record_payloads)
-        return ev[0] if ev else None
+        event_list = self.build_event_list(req, resp, middleware_cfg,
+                                           record_payloads)
+        if event_list:
+            ev = event_list[0]
+            if record_payloads:
+                self.assertIn('attachments', ev, "payload attachment missing")
+                self.assertIn('payload',
+                              [x['name'] for x in ev['attachments']])
+            else:
+                self.assertNotIn('payload',
+                                 [x['name'] for x in ev.get('attachments',
+                                                            [])])
+
+            return ev
+
+        return None
 
     def build_event_list(self, req, resp=None, middleware_cfg=None,
                          record_payloads=False):
@@ -136,7 +150,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                                   remote_addr='192.168.0.1')
         if req_json:
             req.json = req_json
-        elif method[0] == 'P':  # POST, PUT, PATCH
+        elif method[0] == 'P' and not url.endswith('action'):
+            # POST, PUT, PATCH resource
             req.json = {'name': 'utest'}
 
         resp = webob.Response(content_type=JSON)
