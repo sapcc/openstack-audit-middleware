@@ -150,7 +150,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                                   remote_addr='192.168.0.1')
         if req_json:
             req.json = req_json
-        elif method[0] == 'P':  # POST, PUT, PATCH
+        elif method[0] == 'P' and not url.endswith('action'):
+            # POST, PUT, PATCH resource
             req.json = {'name': 'utest'}
 
         resp = webob.Response(content_type=JSON)

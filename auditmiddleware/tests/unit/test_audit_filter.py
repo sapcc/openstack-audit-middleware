@@ -450,16 +450,15 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertIsNone(event, "malformed ./action with no payload should "
                                  "be ignored")
 
-    def test_post_action_filtered(self):
+    def test_post_undefined_action_generic(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
         request, response = self.build_api_call('POST', url,
                                                 req_json={"unknown": "bla"})
         event = self.build_event(request, response)
-
-        self.assertIsNone(event, "unknown actions should be ignored if a "
-                                 "mapping was declared")
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/unknown", "compute/server", rid)
 
     def test_post_resource_filtered(self):
         rid = str(uuid.uuid4().hex)

@@ -495,26 +495,6 @@ class OpenStackAuditMiddleware(object):
     def _get_action(self, res_spec, res_id, request, suffix):
         """Given a resource spec, a request and a path suffix, deduct
         the correct CADF action.
-
-        Depending on req.method:
-
-        if POST:
-
-        - path ends with 'action', read the body and use as action;
-        - path ends with known custom_action, take action from config;
-        - request ends with known (child-)resource type, assume is create
-        action
-        - request ends with unknown path, assume is update action.
-
-        if GET:
-
-        - request ends with known path, assume is list action;
-        - request ends with unknown path, assume is read action.
-
-        if PUT, assume update action.
-        if DELETE, assume delete action.
-        if HEAD, assume read action.
-
         """
         method = request.method
         if suffix is None:
@@ -545,6 +525,11 @@ class OpenStackAuditMiddleware(object):
                 payload = request.json
                 if payload:
                     rest_action = next(iter(payload))
+                    # check for individual mapping of action
+                    action = res_spec.custom_actions.get(rest_action)
+                    if not action:
+                        return self._map_method_to_action(
+                            method, res_spec, res_id) + '/' + rest_action
                 else:
                     self._log.warning("/action URL without payload: %s",
                                       request.path)
