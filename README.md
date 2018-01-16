@@ -108,9 +108,6 @@ The middleware can emit statistics on emitted events using tagged _statsd_ metri
 
 The default StatsD host and port can be customized using environment variables:
 
-The middleware needs some configuration to define how the [prometheus statsd exporter](https://github.com/prometheus/statsd_exporter) can be reached,
-which can be provided either via environment variables:
-
     STATSD_HOST     the statsd hostname
     STATSD_PORT     the statsd portnumber
  
