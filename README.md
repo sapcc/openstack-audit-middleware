@@ -1,5 +1,11 @@
 # openstack-audit-middleware
-Paste middleware to produce an CADF audit trail from OpenStack API calls.
+Paste middleware to produce an CADF audit trail from OpenStack API calls. Currently the following OpenStack services are supported out-of-the-box today:
+
+  * Nova
+  * Neutron
+  * Cinder
+
+Additional APIs can be supported without changing the code easily. 
 
 It is a major redesign of the original _audit_ module within the [keystonemiddleware](https://github.com/openstack/keystonemiddleware). It has been invented to produce a more
 verbose audit trail that can be consumed by auditors, end users and complex event processing infrastructures alike.
