@@ -33,13 +33,28 @@ class _LogNotifier(object):
 
 
 class _MessagingNotifier(Thread):
-    def __init__(self, notifier, log, mem_queue_size):
+    def __init__(self, notifier, log, mem_queue_size, metrics_enabled):
         super(_MessagingNotifier, self).__init__(
             name='async auditmiddleware notifications')
         self._log = log
         self._notifier = notifier
         self._queue_capacity = mem_queue_size
         self._queue = queue.Queue(mem_queue_size)
+
+        self._statsd = self._create_statsd_client() \
+            if metrics_enabled else None
+
+    def _create_statsd_client(self):
+        try:
+            import datadog
+
+            return datadog.dogstatsd.DogStatsd(
+                host=os.getenv('STATSD_HOST', 'localhost'),
+                port=int(os.getenv('STATSD_PORT', '8125')),
+                namespace='openstack_audit_messaging')
+        except ImportError:
+            self._log.warning("Python datadog package not installed. No "
+                              "openstack_audit_* metrics will be produced.")
 
     def notify(self, context, payload):
         self.enqueue_notification(payload, context)
@@ -49,6 +64,8 @@ class _MessagingNotifier(Thread):
             self._log.debug("enqueue event: %s", payload.get("id"))
             self._queue.put((payload, context), timeout=1)
             sz = self._queue.qsize()
+            if self.statsd:
+                self._statsd.gauge('backlog', sz, sample_rate=0.01)
             u = sz * 100 / self._queue_capacity
             if sz > 1 and u >= 10 and u % 10 == 0:
                 self._log.debug("backlog: queue size reached %d items ("
@@ -65,6 +82,8 @@ class _MessagingNotifier(Thread):
         except queue.Full:
             self._log.error("Audit events could not be delivered ("
                             "buffer full). Payload follows ...")
+            if self._statsd:
+                self._statsd.increment('overflows', self._queue.qsize())
             self.flush_to_log()
             self.log_event(context, payload)
 
@@ -73,6 +92,8 @@ class _MessagingNotifier(Thread):
             try:
                 payload, context = self._queue.get()
                 self._notifier.info(context, "audit.cadf", payload)
+                if self._statsd:
+                    self._statsd.increment('deliveries', 0.01)
                 self._log.debug("Push event: %s", payload.get("id"))
             except queue.Empty:
                 # ignore
@@ -82,6 +103,8 @@ class _MessagingNotifier(Thread):
                 self._log.error("Cannot push audit events to message queue: "
                                 "%s", str(sys.exc_info()[0]))
                 self.log_event(context, payload)
+                if self._statsd:
+                    self._statsd.increment('errors')
                 self.flush_to_log()
 
     def log_event(self, context, payload):
@@ -100,7 +123,7 @@ class _MessagingNotifier(Thread):
             pass
 
 
-def create_notifier(conf, log):
+def create_notifier(conf, log, metrics_enabled):
     if oslo_messaging:
         transport = oslo_messaging.get_notification_transport(
             conf,
@@ -114,7 +137,7 @@ def create_notifier(conf, log):
         mqs = conf.audit_middleware_notifications.mem_queue_size
         if mqs is None:
             mqs = 10000
-        notf = _MessagingNotifier(notifier, log, mqs)
+        notf = _MessagingNotifier(notifier, log, mqs, metrics_enabled)
         notf.setDaemon(True)
         notf.start()
         return notf

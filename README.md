@@ -22,37 +22,35 @@ will write audit events to the application log instead. Auditing can be enabled 
 service by editing the services's `api-paste.ini` file to include the following
 filter definition:
 
-```
-[filter:audit]
-paste.filter_factory = auditmiddleware:filter_factory
-audit_map_file = /etc/nova/api_audit_map.yaml
-```
+    [filter:audit]
+    paste.filter_factory = auditmiddleware:filter_factory
+    audit_map_file = /etc/nova/api_audit_map.yaml
 
 The filter must be included after Keystone middleware's *authtoken* filter so it can utilise request header variables set by it.
 
 Below is an example using Nova's WSGI pipeline::
 
-```
-[composite:openstack_compute_api_v2]
-use = call:nova.api.auth:pipeline_factory
-noauth = faultwrap sizelimit noauth ratelimit osapi_compute_app_v2
-keystone = faultwrap sizelimit authtoken keystonecontext ratelimit audit osapi_compute_app_v2
-keystone_nolimit = faultwrap sizelimit authtoken keystonecontext audit osapi_compute_app_v2
-```
+    [composite:openstack_compute_api_v2]
+    use = call:nova.api.auth:pipeline_factory
+    noauth = faultwrap sizelimit noauth ratelimit osapi_compute_app_v2
+    keystone = faultwrap sizelimit authtoken keystonecontext ratelimit audit osapi_compute_app_v2
+    keystone_nolimit = faultwrap sizelimit authtoken keystonecontext audit osapi_compute_app_v2
 
 Configure audit middleware
 ==========================
+
+API Mapping
+---------------
+
 To properly audit api requests, the audit middleware requires a mapping
 file. The mapping files describes how to generate CADF events out of REST API calls.
  
 The location of the mapping file should be specified explicitly by adding the
 path to the `audit_map_file` option of the filter definition::
 
-```
-[filter:audit]
-paste.filter_factory = auditmiddleware:filter_factory
-audit_map_file = /etc/nova/api_audit_map.yaml
-```
+    [filter:audit]
+    paste.filter_factory = auditmiddleware:filter_factory
+    audit_map_file = /etc/nova/api_audit_map.yaml
 
 For each supported OpenStack services, a mapping file named
 _\<service\>\_api\_audit\_map.yaml_ is included in the _etc_ folder of this repo.
@@ -62,17 +60,20 @@ Additional options can be set:
 Certain types of HTTP requests can be ignored entirely. Typically GET and HEAD
 requests should not cause the creation of an audit events due to sheer volume.
 
-```
-# ignore any GET or HEAD requests
-ignore_req_list = GET, HEAD
-```
+    # ignore any GET or HEAD requests
+    ignore_req_list = GET, HEAD
+
+Payload Recording
+-----------------
 
 The payload of the API response to CRUD request can be attached to the event as an option. This will increase the size of the events, but brings a lot of value when it comes to diagnostics. Sensitive information can be filtered out using the `payloads` attribute of the resource mapping specification (see below).
 
-```
-# turn on logging on request payloads
-record_payloads = True
-```
+
+    # turn on logging on request payloads
+    record_payloads = True
+
+Oslo Messaging
+--------------
 
 Audit middleware can be configured to use its own exclusive notification driver
 and topic(s) value. This can be useful when the service is already using oslo
@@ -82,10 +83,8 @@ send audit notifications to a log file via 'log' driver.
 
 Example shown below:
 
-```
-[audit_middleware_notifications]
-driver = log
-```
+    [audit_middleware_notifications]
+    driver = log
 
 When audit events are sent via 'messagingv2' or 'messaging', middleware can
 specify a transport URL if its transport URL needs to be different from the
@@ -94,14 +93,39 @@ read from oslo messaging sections defined in service configuration e.g.
 'oslo_messaging_rabbit'.
 
 Example shown below:
-```
-[audit_middleware_notifications]
-driver = messagingv2
-transport_url = rabbit://user2:passwd@host:5672/another_virtual_host
-```
+
+    [audit_middleware_notifications]
+    driver = messagingv2
+    transport_url = rabbit://user2:passwd@host:5672/another_virtual_host
+
+Statistics and Operational Metrics
+----------------------------------
+
+The middleware can emit statistics on emitted events using tagged _statsd_ metrics. This requires a DogStatsD compatible statsd service like the [Prometheus StatsD exporter](https://hub.docker.com/r/prom/statsd-exporter/).
+
+    # turn on metrics
+    enable_metrics = True
+
+The default StatsD host and port can be customized using environment variables:
+
+The middleware needs some configuration to define how the [prometheus statsd exporter](https://github.com/prometheus/statsd_exporter) can be reached,
+which can be provided either via environment variables:
+
+    STATSD_HOST     the statsd hostname
+    STATSD_PORT     the statsd portnumber
+ 
+The following metrics an dimensions are supported 
+
+| Metric                           | Description      | Dimensions/Tags                                                  |
+|----------------------------------|------------------|--------------------------------------------------------------------|
+| openstack_audit_events     | Statistics on produced audit events per tenant | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
+| openstack_audit_events_buffered | Events buffered in memory waiting for message queue to catch up | |
+| openstack_audit_events_delivered | Events buffered in memory waiting for message queue to catch up | |
+| openstack_audit_messaging_overflows | Number of lost events due to message queue latency or downtime | |
+| openstack_audit_messaging_errors | Failed attempts to push to message queue, leading to events dumped into log files | |
 
 Customizing the CADF mapping rules
-----------------------------------
+==================================
 
 The CADF mapping rules are essentially a model of resources. Due to REST principles, this model implies how the HTTP API requests are formed.
 
@@ -110,81 +134,77 @@ The path of the request specifies the resource that is the target of the request
 In the mapping file, the prefix is specified using a regular expression. In those cases where the prefix contains the target project id, the regular expression needs to capture the relevant part of the prefix using a _named_ match group called
 _project\_id_
 
-```
-prefix: '/v2.0/(?P<project_id>[0-9a-f\-]*)'
-```
+    prefix: '/v2.0/(?P<project_id>[0-9a-f\-]*)'
 
 The resource path is a concatenation of resource names and IDs.
 
 Additional hints are added to address exceptions to those principles and support custom values for the CADF *action* attribute.
 
 Example (Nova)::
-```
-  # service type as configured in the OpenStack catalog
-  service_type: compute
-  # configure prefix, use the named match group 'project_id' to mark the tenant
-  prefix: '/v2[0-9\.]*/(?P<project_id>[0-9a-f\-]*)'
-   
-  # describe resources exposed by the REST API
-  # URL paths follow one of the following patterns:
-  # - /<resources>: HTTP POST for create, GET for list
-  # - /<resources>/<resource-id>: HTTP GET for read, PUT for update, DELETE for remove
-  # - /<resources>/<resource-id>/<custom-action>: specified per resource
-  # - /<resources>/<resource-id>/<child-resource>: like parent
-  # - /<resources>/<resource-id>/<child-resource>/<child-resource-id>: like parent
-  # - /<resources>/<resource-id>/<child-resource-singleton>: singleton resource (e.g. attribute), no own ID
-  resources:
-    servers: # resource name, placed first in the URL path (with an added "s"), followed by the ID
-        # type URI of the resource, defaults to <service-key>/<resources>
-        # the target id of the resource (list) type is refering to the service
-        type_uri: compute/servers
-        # the target id of the resource element type is refering to the element
-        el_type_uri: compute/server
-        # URL-endcoded actions, last part of the URL path, following the ID of the target (child-)resource
-        # or "action" in which case the actual action is the first and only element of the JSON payload
-        custom_actions:
-          # <url-path-suffix>: <cadf-action>
-          startup: start/startup
-        # resource attributes that should be attached to the event on each create/update
-        custom_attributes:
-          # provide attribute name and value type
-          security_groups: compute/server/security-groups
-        # child resources, placed after the parent resource ID in the URL path
-        children:
-          metadata:
-            # singleton of keys
-            singleton: true
-            # wrapped in a JSON element named "meta"
-            type_name: meta
-          migrations:
-            # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
-            # type_uri: compute/server/migrations
-            # element type URI of the resource, defaults to <parent-(el_)type_uri>/<resource> (singular form)
-              el_type_uri: compute/server/migration
-          os-interfaces:
-            # for some reason Nova does not use plural for the os-interfaces of a server
-            api_name: 'os-interface'
-            # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
-            custom_id: port_id
-          os-server-password:
-            # this is an attribute, so there is only a single resource per parent
-            # that means no pluralization of the resource name in the URL and no ID
-            singleton: true
-            # when record_payloads is True, this section controls with
-            # attributes of the response payload are part of the 'payloads' attachment 
-            payloads:
-              # never record payloads for the os-server-password resource
-              enabled: False
-    flavors:
-      payloads:
-        exclude:
-          # filter lengthy fields with no real diagnostic value
-          - description
-          - links
-        # include:
-        # # use white-list approach when most fields are irrelevant or sensitive
-        #   - name
-        #   - id
-        #   - ram
-        #   - disk
-```
+      # service type as configured in the OpenStack catalog
+      service_type: compute
+      # configure prefix, use the named match group 'project_id' to mark the tenant
+      prefix: '/v2[0-9\.]*/(?P<project_id>[0-9a-f\-]*)'
+       
+      # describe resources exposed by the REST API
+      # URL paths follow one of the following patterns:
+      # - /<resources>: HTTP POST for create, GET for list
+      # - /<resources>/<resource-id>: HTTP GET for read, PUT for update, DELETE for remove
+      # - /<resources>/<resource-id>/<custom-action>: specified per resource
+      # - /<resources>/<resource-id>/<child-resource>: like parent
+      # - /<resources>/<resource-id>/<child-resource>/<child-resource-id>: like parent
+      # - /<resources>/<resource-id>/<child-resource-singleton>: singleton resource (e.g. attribute), no own ID
+      resources:
+        servers: # resource name, placed first in the URL path (with an added "s"), followed by the ID
+            # type URI of the resource, defaults to <service-key>/<resources>
+            # the target id of the resource (list) type is refering to the service
+            type_uri: compute/servers
+            # the target id of the resource element type is refering to the element
+            el_type_uri: compute/server
+            # URL-endcoded actions, last part of the URL path, following the ID of the target (child-)resource
+            # or "action" in which case the actual action is the first and only element of the JSON payload
+            custom_actions:
+              # <url-path-suffix>: <cadf-action>
+              startup: start/startup
+            # resource attributes that should be attached to the event on each create/update
+            custom_attributes:
+              # provide attribute name and value type
+              security_groups: compute/server/security-groups
+            # child resources, placed after the parent resource ID in the URL path
+            children:
+              metadata:
+                # singleton of keys
+                singleton: true
+                # wrapped in a JSON element named "meta"
+                type_name: meta
+              migrations:
+                # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
+                # type_uri: compute/server/migrations
+                # element type URI of the resource, defaults to <parent-(el_)type_uri>/<resource> (singular form)
+                  el_type_uri: compute/server/migration
+              os-interfaces:
+                # for some reason Nova does not use plural for the os-interfaces of a server
+                api_name: 'os-interface'
+                # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
+                custom_id: port_id
+              os-server-password:
+                # this is an attribute, so there is only a single resource per parent
+                # that means no pluralization of the resource name in the URL and no ID
+                singleton: true
+                # when record_payloads is True, this section controls with
+                # attributes of the response payload are part of the 'payloads' attachment 
+                payloads:
+                  # never record payloads for the os-server-password resource
+                  enabled: False
+        flavors:
+          payloads:
+            exclude:
+              # filter lengthy fields with no real diagnostic value
+              - description
+              - links
+            # include:
+            # # use white-list approach when most fields are irrelevant or sensitive
+            #   - name
+            #   - id
+            #   - ram
+            #   - disk

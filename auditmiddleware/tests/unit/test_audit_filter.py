@@ -269,7 +269,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
             'POST', url,
             req_json=payload_content,
             resp_json={'id': rid, 'name': rname})
-        event = self.build_event(request, response, record_payloads=True)
+        event = self.build_event(request, response, record_payloads=True,
+                                 metrics_enabled=False)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
