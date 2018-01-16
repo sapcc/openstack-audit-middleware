@@ -13,6 +13,7 @@
 import collections
 import hashlib
 import json
+import os
 import re
 import socket
 import uuid
@@ -71,6 +72,12 @@ class OpenStackResource(resource.Resource):
         if domain_id:
             self.domain_id = domain_id
 
+    def __getattr__(self, item):
+        if item in ['project_id', 'domain_id']:
+            return None
+        else:
+            return super(self, OpenStackResource).__getattribute__(self, item)
+
 
 def str_map(param):
     if not param:
@@ -100,8 +107,18 @@ def payloads_map(param):
     return param
 
 
+def _make_tags(ev):
+    return [
+        'project_id:{0}'.format(ev.target.project_id or
+                                ev.initiator.project_id or
+                                ev.initiator.domain_id),
+        'target_type_uri:{0}'.format(ev.target.typeURI),
+        'action:{0}'.format(ev.action),
+        'outcome:{0}'.format(ev.outcome)]
+
+
 class OpenStackAuditMiddleware(object):
-    def __init__(self, cfg_file, payloads_enabled,
+    def __init__(self, cfg_file, payloads_enabled, metrics_enabled,
                  log=logging.getLogger(__name__)):
         """Configure to recognize and map known api paths."""
         self._log = log
@@ -124,6 +141,23 @@ class OpenStackAuditMiddleware(object):
         except (OSError, yaml.YAMLError) as err:
             raise ConfigError('Error opening config file %s: %s',
                               cfg_file, str(err))
+
+        self._statsd = self._create_statsd_client() \
+            if metrics_enabled else None
+
+    def _create_statsd_client(self):
+        try:
+            import datadog
+
+            return datadog.dogstatsd.DogStatsd(
+                host=os.getenv('STATSD_HOST', 'localhost'),
+                port=int(os.getenv('STATSD_PORT', '8125')),
+                namespace='openstack_audit',
+                constant_tags=['service:{0}'.format(self._service_type)]
+            )
+        except ImportError:
+            self._log.warning("Python datadog package not installed. No "
+                              "openstack_audit_* metrics will be produced.")
 
     def _build_audit_map(self, res_dict, parent_type_uri=None):
         result = {}
@@ -252,6 +286,8 @@ class OpenStackAuditMiddleware(object):
     def _create_events(self, target_project, res_id,
                        res_parent_id,
                        res_spec, request, response, suffix=None):
+        events = []
+
         # check for update operations
         if request.method[0] == 'P' and response \
                 and response.content_length > 0 \
@@ -260,11 +296,14 @@ class OpenStackAuditMiddleware(object):
 
             # check for bulk-operation
             if not res_spec.singleton and \
-               isinstance(res_payload.get(res_spec.type_name), list):
+                    isinstance(res_payload.get(res_spec.type_name), list):
                 # payloads contain an attribute named like the resource
                 # which contains a list of items
-                events = []
                 res_pl = res_payload[res_spec.type_name]
+                req_pl = None
+                if self._payloads_enabled and res_spec.payloads['enabled']:
+                    req_pl = iter(request.json.get(res_spec.type_name))
+
                 for subpayload in res_pl:
                     ev = self._create_event_from_payload(target_project,
                                                          res_spec,
@@ -272,20 +311,12 @@ class OpenStackAuditMiddleware(object):
                                                          res_parent_id,
                                                          request, response,
                                                          subpayload, suffix)
+                    pl = req_pl.next() if req_pl else None
                     if ev:
+                        if pl:
+                            self._attach_payload(ev, pl, res_spec)
                         events.append(ev)
 
-                # attach payload if configured for bulk-operation
-                if self._payloads_enabled and res_spec.payloads['enabled']:
-                    req_pl = request.json.get(res_spec.type_name)
-                    i = 0
-                    for pl in req_pl:
-                        attach_val = self._create_payload_attachment(
-                            pl, res_spec)
-                        events[i].add_attachment(attach_val)
-                        i += 1
-
-                return events
             else:
                 # remove possible wrapper elements
                 res_payload = res_payload.get(res_spec.el_type_name,
@@ -306,11 +337,9 @@ class OpenStackAuditMiddleware(object):
                     req_pl = request.json
                     # remove possible wrapper elements
                     req_pl = req_pl.get(res_spec.el_type_name, req_pl)
-                    attach_val = self._create_payload_attachment(req_pl,
-                                                                 res_spec)
-                    event.add_attachment(attach_val)
+                    self._attach_payload(event, req_pl, res_spec)
 
-                return [event]
+                events.append(event)
         else:
             event = self._create_cadf_event(target_project, res_spec, res_id,
                                             res_parent_id,
@@ -319,11 +348,18 @@ class OpenStackAuditMiddleware(object):
                 return []
 
             if event and request.method[0] == 'P' \
-               and self._payloads_enabled and res_spec.payloads['enabled']:
-                event.add_attachment(self._create_payload_attachment(
-                    request.json, res_spec))
+                    and self._payloads_enabled \
+                    and res_spec.payloads['enabled']:
+                self._attach_payload(event, request.json, res_spec)
 
-            return [event]
+            events = [event]
+
+        for ev in events:
+            if self._statsd:
+                self._statsd.increment('events',
+                                       tags=_make_tags(ev))
+
+        return events
 
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
@@ -419,9 +455,7 @@ class OpenStackAuditMiddleware(object):
             req_pl = request.json
             # remove possible wrapper elements
             req_pl = req_pl.get(res_spec.el_type_name, req_pl)
-            attach_val = self._create_payload_attachment(req_pl,
-                                                         res_spec)
-            event.add_attachment(attach_val)
+            self._attach_payload(event, req_pl, res_spec)
 
         # TODO add reporter step again?
         # event.add_reporterstep(
@@ -432,7 +466,7 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    def _create_payload_attachment(self, payload, res_spec):
+    def _attach_payload(self, event, payload, res_spec):
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
         res_payload = {}
@@ -455,7 +489,7 @@ class OpenStackAuditMiddleware(object):
                                                    separators=(',', ':')),
                                 name='payload')
 
-        return attach_val
+        event.add_attachment(attach_val)
 
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):

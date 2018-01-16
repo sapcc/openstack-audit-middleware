@@ -20,9 +20,8 @@ provides.
 """
 
 import copy
-import functools
-
 import datetime
+import functools
 
 import pycadf
 import pytz
@@ -116,9 +115,12 @@ class AuditMiddleware(object):
         self._cadf_audit = _api.OpenStackAuditMiddleware(
             conf.get('audit_map_file'),
             conf.get('record_payloads', False),
+            conf.get('metrics_enabled', False),
             _LOG)
 
-        self._notifier = _notifier.create_notifier(self._conf, _LOG)
+        self._notifier = _notifier.create_notifier(self._conf, _LOG,
+                                                   conf.get('metrics_enabled',
+                                                            False))
         _LOG.debug("audit middleware config: %s", conf)
 
     @_log_and_ignore_error

@@ -13,12 +13,14 @@ import uuid
 
 import webob
 import webob.dec
+from mock import mock
 from oslo_config import fixture as cfg_fixture
 from oslo_messaging import conffixture as msg_fixture
 from oslotest import createfile
 from testtools.matchers import MatchesRegex
 
 import auditmiddleware
+from auditmiddleware._api import _make_tags
 from auditmiddleware.tests.unit import utils
 
 iso8601 = r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
@@ -88,6 +90,13 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.username = "test user " + str(user_counter)
         user_counter += 1
 
+        patcher = mock.patch('datadog.dogstatsd.DogStatsd._report')
+        self.statsd_report_mock = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def assert_statsd_counter(self, metric, value, tags=[]):
+        self.statsd_report_mock.assert_any_call(metric, 'c', value, tags, 1)
+
     def create_middleware(self, cb, **kwargs):
         @webob.dec.wsgify
         def _do_cb(req):
@@ -112,9 +121,9 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         return env_headers
 
     def build_event(self, req, resp=None, middleware_cfg=None,
-                    record_payloads=False):
+                    record_payloads=False, metrics_enabled=True):
         event_list = self.build_event_list(req, resp, middleware_cfg,
-                                           record_payloads)
+                                           record_payloads, metrics_enabled)
         if event_list:
             ev = event_list[0]
             if record_payloads:
@@ -131,12 +140,20 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         return None
 
     def build_event_list(self, req, resp=None, middleware_cfg=None,
-                         record_payloads=False):
+                         record_payloads=False, metrics_enabled=True):
         cfg = middleware_cfg or self.audit_map
         middleware = auditmiddleware._api.OpenStackAuditMiddleware(
-            cfg, record_payloads)
-        events = middleware.create_events(req, resp)
-        return [e.as_dict() for e in events] if events else None
+            cfg, record_payloads, metrics_enabled=metrics_enabled)
+        events = middleware.create_events(req, resp) or []
+        if metrics_enabled:
+            for e in events:
+                self.assert_statsd_counter('events', 1,
+                                           tags=_make_tags(e))
+            # will not check for operational metrics
+        else:
+            self.statsd_report_mock.assert_not_called()
+
+        return [e.as_dict() for e in events]
 
     def build_api_call(self, method, url, req_json=None,
                        resp_json=None, resp_code=0,
