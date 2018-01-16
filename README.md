@@ -110,7 +110,7 @@ Statistics and Operational Metrics
 The middleware can emit statistics on emitted events using tagged _statsd_ metrics. This requires a DogStatsD compatible statsd service like the [Prometheus StatsD exporter](https://hub.docker.com/r/prom/statsd-exporter/).
 
     # turn on metrics
-    enable_metrics = True
+    metrics_enabled = True
 
 The default StatsD host and port can be customized using environment variables:
 
