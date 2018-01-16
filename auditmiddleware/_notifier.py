@@ -65,7 +65,7 @@ class _MessagingNotifier(Thread):
             self._queue.put((payload, context), timeout=1)
             sz = self._queue.qsize()
             if self.statsd:
-                self._statsd.gauge('backlog', sz, sample_rate=0.01)
+                self._statsd.gauge('backlog', sz)
             u = sz * 100 / self._queue_capacity
             if sz > 1 and u >= 10 and u % 10 == 0:
                 self._log.debug("backlog: queue size reached %d items ("
@@ -93,7 +93,7 @@ class _MessagingNotifier(Thread):
                 payload, context = self._queue.get()
                 self._notifier.info(context, "audit.cadf", payload)
                 if self._statsd:
-                    self._statsd.increment('deliveries', 0.01)
+                    self._statsd.increment('deliveries')
                 self._log.debug("Push event: %s", payload.get("id"))
             except queue.Empty:
                 # ignore
