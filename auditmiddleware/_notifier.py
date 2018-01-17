@@ -64,21 +64,9 @@ class _MessagingNotifier(Thread):
             self._log.debug("enqueue event: %s", payload.get("id"))
             self._queue.put((payload, context), timeout=1)
             sz = self._queue.qsize()
-            if self.statsd:
-                self._statsd.gauge('backlog', sz)
-            u = sz * 100 / self._queue_capacity
-            if sz > 1 and u >= 10 and u % 10 == 0:
-                self._log.debug("backlog: queue size reached %d items ("
-                                "capacity: %d items)", sz,
-                                self._queue_capacity)
-                if u >= 90:
-                    self._log.warn("backlog: queue size reached %d items ("
-                                   "capacity: %d items)", sz,
-                                   self._queue_capacity)
-                elif u >= 50:
-                    self._log.info("backlog: queue size reached %d items ("
-                                   "capacity: %d items)", sz,
-                                   self._queue_capacity)
+            if self._statsd and sz > 1:
+                # push metric to show that queue lags
+                self._statsd.gauge('backlog', sz - 1)
         except queue.Full:
             self._log.error("Audit events could not be delivered ("
                             "buffer full). Payload follows ...")
@@ -90,10 +78,13 @@ class _MessagingNotifier(Thread):
     def run(self):
         while True:
             try:
+                sz = self._queue.qsize()
                 payload, context = self._queue.get()
                 self._notifier.info(context, "audit.cadf", payload)
-                if self._statsd:
-                    self._statsd.increment('deliveries')
+                # push metric to show that backlog moved back to 0..1
+                # i.e. message queue caught up
+                if self._statsd and sz == 2:
+                    self._statsd.gauge('backlog', 0)
                 self._log.debug("Push event: %s", payload.get("id"))
             except queue.Empty:
                 # ignore
