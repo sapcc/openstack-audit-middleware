@@ -1,11 +1,11 @@
 # openstack-audit-middleware
-Paste middleware to produce an CADF audit trail from OpenStack API calls. Currently the following OpenStack services are supported out-of-the-box today:
+[Paste middleware](https://pypi.python.org/pypi/Paste) to produce a [CADF](http://www.dmtf.org/sites/default/files/standards/documents/DSP0262_1.0.0.pdf) audit trail from OpenStack API calls. Currently the following OpenStack services are supported out-of-the-box today:
 
   * Nova
   * Neutron
   * Cinder
 
-Additional APIs can be supported without changing the code easily.
+Additional APIs can be supported without major code changes through templates.
 
 It is a major redesign of the original _audit_ module within the [keystonemiddleware](https://github.com/openstack/keystonemiddleware). It has been invented to produce a more
 verbose audit trail that can be consumed by auditors, end users and complex event processing infrastructures alike.
@@ -72,7 +72,7 @@ requests should not cause the creation of an audit events due to sheer volume.
 Payload Recording
 -----------------
 
-The payload of the API response to CRUD request can be attached to the event as an option. This will increase the size of the events, but brings a lot of value when it comes to diagnostics. Sensitive information can be filtered out using the `payloads` attribute of the resource mapping specification (see below).
+The payload of the API response to a CRUD request can be attached to the event optionally. This will increase the size of the events, but brings a lot of value when it comes to diagnostics. Sensitive information can be filtered out using the `payloads` attribute of the resource mapping specification (see below).
 
 
     # turn on logging on request payloads
@@ -117,11 +117,11 @@ The default StatsD host and port can be customized using environment variables:
     STATSD_HOST     the statsd hostname
     STATSD_PORT     the statsd portnumber
 
-The following metrics an dimensions are supported
+The following metrics and dimensions are supported
 
 | Metric                           | Description      | Dimensions/Tags                                                  |
 |----------------------------------|------------------|--------------------------------------------------------------------|
-| openstack_audit_events     | Statistics on produced audit events per tenant. This includes not yet delivered ones. | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
+| openstack_audit_events     | Statistics on audit events per tenant. This includes not yet delivered ones. | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
 | openstack_audit_events_buffered | Events buffered in memory waiting for message queue to catch up | |
 | openstack_audit_messaging_overflows | Number of lost events due to message queue latency or downtime | |
 | openstack_audit_messaging_errors | Failed attempts to push to message queue, leading to events dumped into log files | |
@@ -131,7 +131,7 @@ Customizing the CADF mapping rules
 
 The CADF mapping rules are essentially a model of resources. Due to REST principles, this model implies how the HTTP API requests are formed.
 
-The path of the request specifies the resource that is the target of the request. It consist of a prefix and a resource path. The resource path is denoting the resource. The prefix is used for versioning and routing. Sometimes it is even used to specify the target project of an operation (e.g. in Cinder).
+The path of the request specifies the resource that is the target of the request. It consists of a prefix and a resource path. The resource path is denoting the resource. The prefix is used for versioning and routing. Sometimes it is even used to specify the target project of an operation (e.g. in Cinder).
 
 In the mapping file, the prefix is specified using a regular expression. In those cases where the prefix contains the target project id, the regular expression needs to capture the relevant part of the prefix using a _named_ match group called
 _project\_id_
@@ -184,7 +184,7 @@ The following defines a resource with the typeURI `compute/servers`.
  * `custom_actions`: map REST action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
  * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
 
- This resource has a multitude of child resources nested. Some of them exist only once, other can exists several times. This is controlled by the following attribute:
+ This resource has a multitude of child resources nested. Some of them exist only once, others can exist several times. This is controlled by the following attribute:
 
   * `singleton`: `true` when only a single instance of a resource exists. Otherwise the resource is a _collection_, i.e. an ID needs to be specified for address individual resource instances in a URL (default: `false`)
 
