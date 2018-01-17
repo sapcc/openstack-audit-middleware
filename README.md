@@ -184,7 +184,7 @@ The following defines a resource with the typeURI `compute/servers`.
  * `custom_actions`: map REST action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
  * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
 
- This resource has a multitude of child resources nested. Some of them exist only once, other can exist several times. This is controlled by the following attribute:
+ This resource has a multitude of child resources nested. Some of them exist only once, others can exist several times. This is controlled by the following attribute:
 
   * `singleton`: `true` when only a single instance of a resource exists. Otherwise the resource is a _collection_, i.e. an ID needs to be specified for address individual resource instances in a URL (default: `false`)
 
