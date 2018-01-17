@@ -93,7 +93,7 @@ Example shown below:
     driver = log
 
 When audit events are sent via 'messagingv2' or 'messaging', middleware can
-specify a transport URL if it's transport URL needs to be different from the
+specify a transport URL if its transport URL needs to be different from the
 service's own messaging transport setting. Other Transport related settings are
 read from oslo messaging sections defined in service configuration e.g.
 'oslo_messaging_rabbit'.
