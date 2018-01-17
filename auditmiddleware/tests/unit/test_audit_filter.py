@@ -258,7 +258,6 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server", rid, rname)
-        self.assertEqual(rid, event['target']['id'])
 
     def test_post_create_rec_payload(self):
         rid = str(uuid.uuid4().hex)

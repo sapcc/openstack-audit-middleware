@@ -32,6 +32,34 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "compute/servers",
                          None, self.service_name)
 
+    def test_get_read(self):
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('os-hypervisors', prefix='/compute/v2.1',
+                             res_id=rid)
+        resp_json = {'hypervisor': {'id': '1'}}
+        request, response = self.build_api_call('GET', url,
+                                                resp_json=resp_json)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_READ,
+                         "compute/hypervisor", rid)
+
+    def test_post_create_interface_attachment(self):
+        rid = str(uuid.uuid4().hex)
+        net_id = str(uuid.uuid4().hex)
+        port_id = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/compute/v2.1', res_id=rid,
+                             child_res='os-interface')
+        req_json = {'interfaceAttachment': {'net_id': net_id}}
+        resp_json = {'interfaceAttachment': {
+            'net_id': net_id, 'port_id': port_id}}
+        request, response = self.build_api_call(
+            'POST', url, req_json=req_json, resp_json=resp_json)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/server/interface", port_id)
+
     def test_put_global_action(self):
         url = self.build_url('os-services', prefix='/compute/v2.1',
                              suffix="disable")

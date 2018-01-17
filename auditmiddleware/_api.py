@@ -175,7 +175,11 @@ class OpenStackAuditMiddleware(object):
 
             rest_name = spec.get('api_name', name)
             singleton = spec.get('singleton', False)
-            type_name = spec.get('type_name', rest_name.replace('-', '_'))
+            type_name = spec.get('type_name')
+            if not type_name:
+                type_name = rest_name.replace('-', '_')
+                if type_name.startswith('os_'):
+                    type_name = type_name[3:]
             type_uri = spec.get('type_uri', pfx + "/" + name)
             el_type_name = None
             el_type_uri = None

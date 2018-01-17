@@ -64,9 +64,9 @@ class _MessagingNotifier(Thread):
             self._log.debug("enqueue event: %s", payload.get("id"))
             self._queue.put((payload, context), timeout=1)
             sz = self._queue.qsize()
-            if self._statsd and sz > 1:
+            if self._statsd and sz >= 1:
                 # push metric to show that queue lags
-                self._statsd.gauge('backlog', sz - 1)
+                self._statsd.gauge('backlog', sz)
         except queue.Full:
             self._log.error("Audit events could not be delivered ("
                             "buffer full). Payload follows ...")
@@ -83,7 +83,7 @@ class _MessagingNotifier(Thread):
                 self._notifier.info(context, "audit.cadf", payload)
                 # push metric to show that backlog moved back to 0..1
                 # i.e. message queue caught up
-                if self._statsd and sz == 2:
+                if self._statsd and sz == 1:
                     self._statsd.gauge('backlog', 0)
                 self._log.debug("Push event: %s", payload.get("id"))
             except queue.Empty:

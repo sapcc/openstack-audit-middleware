@@ -5,7 +5,7 @@ Paste middleware to produce an CADF audit trail from OpenStack API calls. Curren
   * Neutron
   * Cinder
 
-Additional APIs can be supported without changing the code easily. 
+Additional APIs can be supported without changing the code easily.
 
 It is a major redesign of the original _audit_ module within the [keystonemiddleware](https://github.com/openstack/keystonemiddleware). It has been invented to produce a more
 verbose audit trail that can be consumed by auditors, end users and complex event processing infrastructures alike.
@@ -15,7 +15,7 @@ the _target_ part of the CADF event with the actual resource/object affected by 
 to user friendly presentation of events, e.g. navigation from event to target objects. Previously, the essential information which target object has been affected by an audit-relevant action had been buried in the _requestPath_ attribute or was
 not available at all.
 
-For operators the difference is minor though. The integration of the new middleware in the OpenStack service works the same way with the only change being different mapping files and of course the new binaries.  
+For operators the difference is minor though. The integration of the new middleware in the OpenStack service works the same way with the only change being different mapping files and of course the new binaries.
 
 ![Nova pipeline with audit middleware](./doc/source/images/audit.png)
 
@@ -50,7 +50,7 @@ API Mapping
 
 To properly audit api requests, the audit middleware requires a mapping
 file. The mapping files describes how to generate CADF events out of REST API calls.
- 
+
 The location of the mapping file should be specified explicitly by adding the
 path to the `audit_map_file` option of the filter definition::
 
@@ -116,14 +116,13 @@ The default StatsD host and port can be customized using environment variables:
 
     STATSD_HOST     the statsd hostname
     STATSD_PORT     the statsd portnumber
- 
-The following metrics an dimensions are supported 
+
+The following metrics an dimensions are supported
 
 | Metric                           | Description      | Dimensions/Tags                                                  |
 |----------------------------------|------------------|--------------------------------------------------------------------|
-| openstack_audit_events     | Statistics on produced audit events per tenant | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
+| openstack_audit_events     | Statistics on produced audit events per tenant. This includes not yet delivered ones. | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
 | openstack_audit_events_buffered | Events buffered in memory waiting for message queue to catch up | |
-| openstack_audit_events_delivered | Events buffered in memory waiting for message queue to catch up | |
 | openstack_audit_messaging_overflows | Number of lost events due to message queue latency or downtime | |
 | openstack_audit_messaging_errors | Failed attempts to push to message queue, leading to events dumped into log files | |
 
@@ -139,63 +138,92 @@ _project\_id_
 
     prefix: '/v2.0/(?P<project_id>[0-9a-f\-]*)'
 
-The resource path is a concatenation of resource names and IDs.
+The resource path is a concatenation of resource names and IDs. URL paths follow one of the following patterns:
 
-Additional hints are added to address exceptions to those principles and support custom values for the CADF *action* attribute.
+   - `/<resources>`: HTTP POST for create, GET for list
+   - `/<resources>/<resource-id>`: HTTP GET for read, PUT for update, DELETE for remove
+   - `/<resources>/<resource-id>/action`: POST to perform an action specified by the payload. The payload is expressed as `{<action>: {<parameter1>: <pvalue1>, ...}}`
+   - `/<resources>/<resource-id>/<custom-action>`: perform a custom action specified in the mapping (otherwise this is interpreted as a field, see below)
+   - `/<resources>/<resource-id>/<field>`: update a field of a resource
+   - `/<resources>/<resource-id>/<child-resource>`: like top-level resource
+   - `/<resources>/<resource-id>/<child-resource>/<child-resource-id>`: like top-level resource
 
-Example (Nova)::
-      # service type as configured in the OpenStack catalog
-      service_type: compute
-      # configure prefix, use the named match group 'project_id' to mark the tenant
-      prefix: '/v2[0-9\.]*/(?P<project_id>[0-9a-f\-]*)'
-       
-      # describe resources exposed by the REST API
-      # URL paths follow one of the following patterns:
-      # - /<resources>: HTTP POST for create, GET for list
-      # - /<resources>/<resource-id>: HTTP GET for read, PUT for update, DELETE for remove
-      # - /<resources>/<resource-id>/<custom-action>: specified per resource
-      # - /<resources>/<resource-id>/<child-resource>: like parent
-      # - /<resources>/<resource-id>/<child-resource>/<child-resource-id>: like parent
-      # - /<resources>/<resource-id>/<child-resource-singleton>: singleton resource (e.g. attribute), no own ID
-      resources:
-        servers: # resource name, placed first in the URL path (with an added "s"), followed by the ID
-            # type URI of the resource, defaults to <service-key>/<resources>
-            # the target id of the resource (list) type is refering to the service
-            type_uri: compute/servers
-            # the target id of the resource element type is refering to the element
-            el_type_uri: compute/server
-            # URL-endcoded actions, last part of the URL path, following the ID of the target (child-)resource
-            # or "action" in which case the actual action is the first and only element of the JSON payload
+For _singletons_, i.e. resources with only a single instance, the `<resource-id>` parts are omitted.
+
+Additional hints are added to address exceptions to these design patterns.
+
+Elements by Example
+-------------------
+
+The mapping file starts with general information on the service:
+  - `service_type`: The type of service according to the CADF type taxonomy, i.e. the root of the type hierarchy. All resources of the service are added beneath that root.
+  - `prefix`: The URL prefix used by the service. Some OpenStack services specify the target project/domain in the URL, others rely on the authorization scope or special parameters.
+
+          # service type as configured in the OpenStack catalog
+          service_type: compute
+          # configure prefix, use the named match group 'project_id' to mark the tenant
+          prefix: '/v2[0-9\.]*/(?P<project_id>[0-9a-f\-]*)'
+
+This is followed by a description of the service's resource hierarchy.
+
+The following defines a resource with the typeURI `compute/servers`.
+
+         resources:
+            servers:
+                # type_uri: compute/servers (default)
+                # el_type_uri: compute/server (default)
             custom_actions:
-              # <url-path-suffix>: <cadf-action>
               startup: start/startup
-            # resource attributes that should be attached to the event on each create/update
             custom_attributes:
-              # provide attribute name and value type
+              # always attach the security_groups attribute value
+              # which has type compute/server/security-groups
               security_groups: compute/server/security-groups
-            # child resources, placed after the parent resource ID in the URL path
+
+ It supports some custom actions and has attributes of special importance. The following attribute are used to describe these:
+
+ * `custom_actions`: map REST action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
+ * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
+
+ This resource has a multitude of child resources nested. Some of them exist only once, other can exists several times. This is controlled by the following attribute:
+
+  * `singleton`: `true` when only a single instance of a resource exists. Otherwise the resource is a _collection_, i.e. an ID needs to be specified for address individual resource instances in a URL (default: `false`)
+
+ For some resources, the API design is not following the established naming patterns. Those exceptions can be modelled with the following settings:
+ * `api_name`: resource name in the URL path (default: `<resource-name>`)
+ * `type_uri`: type-URI of the resource, used in the target.typeURI attribute of the produced CADF event (default: `<parent-typeURI>/<resource-name>`)
+ * `el_type_uri`: type-URI of the resource instances if the resource is not a singleton (default: `type_uri` omitting the last character)
+ * `custom_id`: indicate which resource attribute contains the unique resource ID (default: `id`)
+ * `custom_name`: indicate which resource attribute contains the resource readable name (default: `name`)
+ * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name)
+ * `el_type_name`: JSON name of the resource instances (default: `type_name` omitting the last character)
+
             children:
               metadata:
-                # singleton of keys
                 singleton: true
                 # wrapped in a JSON element named "meta"
                 type_name: meta
               migrations:
-                # type URI of the resource, defaults to <parent-type_uri>/<resources> (plural form)
-                # type_uri: compute/server/migrations
-                # element type URI of the resource, defaults to <parent-(el_)type_uri>/<resource> (singular form)
-                  el_type_uri: compute/server/migration
-              os-interfaces:
+                # defaults are all fine for this resource
+              interfaces:
                 # for some reason Nova does not use plural for the os-interfaces of a server
                 api_name: 'os-interface'
+                # in JSON payloads the resource attributes are wrapped in an element called 'interfaceAttachment'
+                type_name: interfaceAttachments
                 # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
                 custom_id: port_id
+
+The configuration option to record request payloads needs some special consideration when sensitive or bulky information in involved:
+
+* `payloads`: controls which attributes of the request payload may not be attached to the event (e.g. because they contain very sensitive information)
+   - `enabled`: set to `false` to disable payload recording for this resource entirely (default: `true`)
+   - `exclude`: exclude these payload attributes from the payload attachment (black-list approach, default: `[]`)
+   - `include`: only include these payload attributes in the payload attachment(white-list approach, default: `all)
+
+In out example this looks like this:
+
+              ...
               os-server-password:
-                # this is an attribute, so there is only a single resource per parent
-                # that means no pluralization of the resource name in the URL and no ID
                 singleton: true
-                # when record_payloads is True, this section controls with
-                # attributes of the response payload are part of the 'payloads' attachment 
                 payloads:
                   # never record payloads for the os-server-password resource
                   enabled: False
@@ -205,9 +233,3 @@ Example (Nova)::
               # filter lengthy fields with no real diagnostic value
               - description
               - links
-            # include:
-            # # use white-list approach when most fields are irrelevant or sensitive
-            #   - name
-            #   - id
-            #   - ram
-            #   - disk
