@@ -32,6 +32,17 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "compute/servers",
                          None, self.service_name)
 
+    def test_get_list_os_migrations(self):
+        url = self.build_url('os-migrations', prefix='/compute/v2.1')
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_LIST,
+                         "compute/migrations",
+                         None, self.service_name)
+
+    # ensure that the os-prefix is omitted when deriving JSON type name from
+    # the api_name
     def test_get_read(self):
         rid = str(uuid.uuid4().hex)
         url = self.build_url('os-hypervisors', prefix='/compute/v2.1',
@@ -44,6 +55,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_READ,
                          "compute/hypervisor", rid)
 
+    # ensure the customized JSON type name is used
     def test_post_create_interface_attachment(self):
         rid = str(uuid.uuid4().hex)
         net_id = str(uuid.uuid4().hex)
