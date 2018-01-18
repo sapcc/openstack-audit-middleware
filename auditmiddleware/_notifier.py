@@ -76,6 +76,10 @@ class _MessagingNotifier(Thread):
             self.log_event(context, payload)
 
     def run(self):
+        # reset sporadic metrics
+        if self._statsd:
+            self._statsd.gauge('backlog', 0)
+            self._statsd.increment('errors', 0)
         while True:
             try:
                 sz = self._queue.qsize()
