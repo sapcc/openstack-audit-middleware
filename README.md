@@ -121,8 +121,8 @@ The following metrics and dimensions are supported
 
 | Metric                           | Description      | Dimensions/Tags                                                  |
 |----------------------------------|------------------|--------------------------------------------------------------------|
-| openstack_audit_events     | Statistics on audit events per tenant. This includes not yet delivered ones. | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
-| openstack_audit_events_buffered | Events buffered in memory waiting for message queue to catch up | |
+| openstack_audit_events  | Statistics on audit events per tenant. This includes not yet delivered ones. | action: CADF action ID, project_id: OpenStack project/domain ID, service: OpenStack service type, target_type: CADF type URI of the target resource, outcome: failed/success/unknown |
+| openstack_audit_events_backlog | Events buffered in memory waiting for message queue to catch up | |
 | openstack_audit_messaging_overflows | Number of lost events due to message queue latency or downtime | |
 | openstack_audit_messaging_errors | Failed attempts to push to message queue, leading to events dumped into log files | |
 

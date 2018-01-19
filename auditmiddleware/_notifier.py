@@ -80,6 +80,7 @@ class _MessagingNotifier(Thread):
         if self._statsd:
             self._statsd.gauge('backlog', 0)
             self._statsd.increment('errors', 0)
+            self._statsd.increment('overflows', 0)
         while True:
             try:
                 sz = self._queue.qsize()
