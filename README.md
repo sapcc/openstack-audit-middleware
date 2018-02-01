@@ -24,8 +24,9 @@ The figure above shows the middleware in Nova's pipeline.
 Enabling audit middleware
 =========================
 To enable auditing, _oslo.messaging_ should be installed. If not, the middleware
-will write audit events to the application log instead. Auditing can be enabled for a specific
-service by editing the services's `api-paste.ini` file to include the following
+will write audit events to the application log instead.
+
+Auditing is enabled by editing the services's `api-paste.ini` file to include the following
 filter definition:
 
     [filter:audit]
@@ -86,6 +87,9 @@ and topic(s) value. This can be useful when the service is already using oslo
 messaging notifications and wants to use a different driver for auditing e.g.
 service has existing notifications sent to queue via 'messagingv2' and wants to
 send audit notifications to a log file via 'log' driver.
+
+The oslo messaging configuration for the audit middleware is at the same place as
+service's oslo messaging configuration: the service configuration file (e.g. `neutron.conf`)
 
 Example shown below:
 
