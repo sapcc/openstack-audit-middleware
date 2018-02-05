@@ -477,14 +477,6 @@ class OpenStackAuditMiddleware(object):
             target=target)
         event.requestPath = request.path_qs
 
-        #
-        if key and request.method[0] == 'P' and self._payloads_enabled and \
-                res_spec.payloads['enabled']:
-            req_pl = request.json
-            # remove possible wrapper elements
-            req_pl = req_pl.get(res_spec.el_type_name, req_pl)
-            self._attach_payload(event, req_pl, res_spec)
-
         # TODO add reporter step again?
         # event.add_reporterstep(
         #    reporterstep.Reporterstep(
