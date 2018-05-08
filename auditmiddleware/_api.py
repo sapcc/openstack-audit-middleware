@@ -97,13 +97,6 @@ def payloads_map(param):
 
     param['enabled'] = bool(param.get('enabled', True))
 
-    incl = param.get('include')
-    if incl:
-        param['include'] = [x.strip() for x in incl.split(',')]
-    excl = param.get('exclude')
-    if excl:
-        param['exclude'] = [x.strip() for x in excl.split(',')]
-
     return param
 
 
