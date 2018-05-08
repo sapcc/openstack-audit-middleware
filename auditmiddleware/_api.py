@@ -97,13 +97,6 @@ def payloads_map(param):
 
     param['enabled'] = bool(param.get('enabled', True))
 
-    incl = param.get('include')
-    if incl:
-        param['include'] = [x.strip() for x in incl.split(',')]
-    excl = param.get('exclude')
-    if excl:
-        param['exclude'] = [x.strip() for x in excl.split(',')]
-
     return param
 
 
@@ -217,6 +210,7 @@ class OpenStackAuditMiddleware(object):
                            request.path)
             return None
 
+        # normalize url: remove trailing slash and .json suffix
         path = path[:-1] if path.endswith('/') else path
         path = path[:-5] if path.endswith('.json') else path
         return self._build_events(target_project, self._resource_specs,
@@ -299,6 +293,11 @@ class OpenStackAuditMiddleware(object):
         return None
 
     def register_resource(self, parent_type_uri, token):
+        """ Register an unknown resource to avoid missed events.
+        The resulting events are a bit raw but contain enough information
+        to understand what happened. This allows for incremental
+        improvement.
+        """
         self._log.warn("unknown resource: %s (created on demand)",
                        token)
         res_name = token.replace('_', '-')
@@ -332,6 +331,7 @@ class OpenStackAuditMiddleware(object):
                 if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = iter(request.json.get(res_spec.type_name))
 
+                # create one event per item
                 for subpayload in res_pl:
                     ev = self._create_event_from_payload(target_project,
                                                          res_spec,
@@ -342,6 +342,7 @@ class OpenStackAuditMiddleware(object):
                     pl = req_pl.next() if req_pl else None
                     if ev:
                         if pl:
+                            # attach payload if requested
                             self._attach_payload(ev, pl, res_spec)
                         events.append(ev)
 
@@ -360,7 +361,7 @@ class OpenStackAuditMiddleware(object):
                 if not event:
                     return []
 
-                # attach payload if configured
+                # attach payload if requested
                 if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = request.json
                     # remove possible wrapper elements

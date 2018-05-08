@@ -43,7 +43,8 @@ resources:
             custom_attr2: "/data/compute/server/custom"
         payloads:
             # hide this attribute from payload attachments
-            exclude: hidden_attr
+            exclude:
+              - hidden_attr
         children:
             interfaces:
                 api_name: os-interface
