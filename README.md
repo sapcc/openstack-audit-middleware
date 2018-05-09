@@ -183,12 +183,20 @@ The following defines a resource with the typeURI `compute/servers`.
               # which has type compute/server/security-groups
               security_groups: compute/server/security-groups
 
- It supports some custom actions and has attributes of special importance. The following attribute are used to describe these:
+In addition to the HTTP _method_, OpenStack services can expose custom actions that go beyond CRUD. There are two ways they are encoded in the HTTP request:
+  
+  * the last component of the URL path is the action name ([example](https://developer.openstack.org/api-ref/shared-file-system/#id382))
+  * the last component of the URL path is `action` and the payload contains the action name as the first JSON element ([example](https://developer.openstack.org/api-ref/shared-file-system/#grant-access])
+  
+Usually all custom actions should be listed in the mapping because otherwise the last path component will be taken as a custom _key_ of the resource or ignored right-away:
 
- * `custom_actions`: map REST action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
- * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
+* `custom_actions`: map custom action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
+ 
+Attributes of special importance can be added to every event by specifying _custom attributes_:
 
- This resource has a multitude of child resources nested. Some of them exist only once, others can exist several times. This is controlled by the following attribute:
+* `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
+
+This resource has a multitude of child resources nested. Some of them exist only once, others can exist several times. This is controlled by the following attribute:
 
   * `singleton`: `true` when only a single instance of a resource exists. Otherwise the resource is a _collection_, i.e. an ID needs to be specified for address individual resource instances in a URL (default: `false`)
 
