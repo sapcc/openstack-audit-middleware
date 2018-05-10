@@ -10,7 +10,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import Queue as queue
+from six.moves import queue
 import os
 import sys
 from threading import Thread
