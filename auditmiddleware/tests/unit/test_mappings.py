@@ -403,6 +403,7 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_READ,
                          "storage/volume/type/project-acl", rid)
 
+
 class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
         super(ManilaAuditMappingTest, self).setUp()
