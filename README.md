@@ -183,25 +183,26 @@ The following defines a resource with the typeURI `compute/servers`.
               # which has type compute/server/security-groups
               security_groups: compute/server/security-groups
 
-In addition to the HTTP _method_, OpenStack services can expose custom actions that go beyond CRUD. There are two ways they are encoded in the HTTP request:
+In addition to the basic resource actions implied by the HTTP _method_, OpenStack services can expose custom actions that go beyond CRUD. Two ways how to encoded action names in the HTTP request are common:
   
   * the last component of the URL path is the action name ([example](https://developer.openstack.org/api-ref/shared-file-system/#id382))
   * the last component of the URL path is `action` and the payload contains the action name as the first JSON element ([example](https://developer.openstack.org/api-ref/shared-file-system/#grant-access])
   
 Usually all custom actions should be listed in the mapping because otherwise the last path component will be taken as a custom _key_ of the resource or ignored right-away:
 
-* `custom_actions`: map custom action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
+ * `custom_actions`: map custom action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
  
-Attributes of special importance can be added to every event by specifying _custom attributes_:
+Attributes of special importance can be added to every update-like event by specifying _custom attributes_:
 
-* `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
+ * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
 
-This resource has a multitude of child resources nested. Some of them exist only once, others can exist several times. This is controlled by the following attribute:
+
+Some resources exist only once, i.e. they only have a single _instance_ and thus no unique ID.This is controlled by the following attribute:
 
   * `singleton`: `true` when only a single instance of a resource exists. Otherwise the resource is a _collection_, i.e. an ID needs to be specified for address individual resource instances in a URL (default: `false`)
 
- For some resources, the API design is not following the established naming patterns. Those exceptions can be modelled with the following settings:
- * `api_name`: resource name in the URL path (default: `<resource-name>`)
+For some resources, some API designs do not follow the common OpenStack naming patterns. Those exceptions can be modelled with the following settings:
+ * `api_name`: resource name in the URL path (default: `<resource-name>`); must be unique
  * `type_uri`: type-URI of the resource, used in the target.typeURI attribute of the produced CADF event (default: `<parent-typeURI>/<resource-name>`)
  * `el_type_uri`: type-URI of the resource instances if the resource is not a singleton (default: `type_uri` omitting the last character)
  * `custom_id`: indicate which resource attribute contains the unique resource ID (default: `id`)
@@ -209,8 +210,14 @@ This resource has a multitude of child resources nested. Some of them exist only
  * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name)
  * `el_type_name`: JSON name of the resource instances (default: `type_name` omitting the last character)
 
+Resources can be nested, meaning that a resource is part of another resource. Nesting is used to model various design patterns:
+
+  * _composition_: a resource is really part of another resource, so that e.g. the resource is deleted when its parent is deleted.
+  * _grouping_: a _singleton_ resource is used to group related resources or _custom fields_.
+
             children:
               metadata:
+                # collection of fields/keys
                 singleton: true
                 # wrapped in a JSON element named "meta"
                 type_name: meta
