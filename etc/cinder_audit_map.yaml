@@ -9,7 +9,7 @@ resources:
   backups:
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
       export_record: read/export
       import_record: update/import
       os-force_delete: delete/forced
@@ -23,19 +23,19 @@ resources:
       create_from_src: create/from-snapshot
       delete: delete
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
       update: update/diff/volumes
   consistency-group-snapshots:
     api_name: cgsnapshots
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
   extensions:
   groups:
     custom_actions:
       delete: delete
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
       disable_replication: disable/replication
       enable_replication: enable/replication
       failover_replication: update/failover
@@ -45,7 +45,7 @@ resources:
     api_name: group_snapshots
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
       reset_status: update/set/status
   group-types:
     api_name: group_types
@@ -60,11 +60,11 @@ resources:
     api_name: manageable_snapshots
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
   manageable_volumes:
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
   messages:
   resource_filters:
     singleton: true
@@ -77,10 +77,9 @@ resources:
     children:
       associations:
         singleton: true
-  quota-classes:
+  quota-class-sets:
     api_name: os-quota-class-sets
-    el_type_uri: network/quota-class
-  quotas:
+  quota-sets:
     api_name: os-quota-sets
     custom_actions:
       validate_setup_for_nested_quota_use: read/validate
@@ -108,7 +107,7 @@ resources:
   snapshots:
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
       os-reset_status: update/set/status
     children:
       metadata:
@@ -141,7 +140,7 @@ resources:
   volumes:
     custom_actions:
       # model details listing a action
-      details: read/list/details
+      detail: read/list/details
       os-attach: update/attach
       os-detach: update/detach
       os-extend: update/extend
