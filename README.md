@@ -207,7 +207,7 @@ For some resources, some API designs do not follow the common OpenStack naming p
  * `el_type_uri`: type-URI of the resource instances if the resource is not a singleton (default: `type_uri` omitting the last character)
  * `custom_id`: indicate which resource attribute contains the unique resource ID (default: `id`)
  * `custom_name`: indicate which resource attribute contains the resource readable name (default: `name`)
- * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name)
+ * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name, but with `-` replaced by `_`)
  * `el_type_name`: JSON name of the resource instances (default: `type_name` omitting the last character)
 
 Resources can be nested, meaning that a resource is part of another resource. Nesting is used to model various design patterns:
@@ -215,21 +215,21 @@ Resources can be nested, meaning that a resource is part of another resource. Ne
   * _composition_: a resource is really part of another resource, so that e.g. the resource is deleted when its parent is deleted.
   * _grouping_: a _singleton_ resource is used to group related resources or _custom fields_.
 
-            children:
-              metadata:
-                # collection of fields/keys
-                singleton: true
-                # wrapped in a JSON element named "meta"
-                type_name: meta
-              migrations:
-                # defaults are all fine for this resource
-              interfaces:
-                # for some reason Nova does not use plural for the os-interfaces of a server
-                api_name: 'os-interface'
-                # in JSON payloads the resource attributes are wrapped in an element called 'interfaceAttachment'
-                type_name: interfaceAttachments
-                # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
-                custom_id: port_id
+        children:
+          metadata:
+            # collection of fields/keys
+            singleton: true
+            # wrapped in a JSON element named "meta"
+            type_name: meta
+          migrations:
+            # defaults are all fine for this resource
+          interfaces:
+            # for some reason Nova does not use plural for the os-interfaces of a server
+            api_name: 'os-interface'
+            # in JSON payloads the resource attributes are wrapped in an element called 'interfaceAttachment'
+            type_name: interfaceAttachments
+            # the unique ID of an os-interface is located in attribute 'port_id' (not 'id')
+            custom_id: port_id
 
 The configuration option to record request payloads needs some special consideration when sensitive or bulky information in involved:
 
@@ -238,17 +238,17 @@ The configuration option to record request payloads needs some special considera
    - `exclude`: exclude these payload attributes from the payload attachment (black-list approach, default: `[]`)
    - `include`: only include these payload attributes in the payload attachment(white-list approach, default: `all)
 
-In out example this looks like this:
+In our example this looks like this:
 
-              ...
-              os-server-password:
-                singleton: true
-                payloads:
-                  # never record payloads for the os-server-password resource
-                  enabled: False
-        flavors:
-          payloads:
-            exclude:
-              # filter lengthy fields with no real diagnostic value
-              - description
-              - links
+          ...
+          os-server-password:
+               singleton: true
+            payloads:
+              # never record payloads for the os-server-password resource
+              enabled: False
+    flavors:
+      payloads:
+        exclude:
+          # filter lengthy fields with no real diagnostic value
+          - description
+          - links
