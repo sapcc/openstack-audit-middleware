@@ -368,7 +368,7 @@ class OpenStackAuditMiddleware(object):
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
                                    subpayload, suffix=None):
-        self._log.debug("create event from payload:\n%s", subpayload)
+        self._log.debug("create event from payload: %s", subpayload)
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, suffix)

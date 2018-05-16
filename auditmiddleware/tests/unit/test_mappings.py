@@ -382,26 +382,16 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "storage/volume/type/encryption-type",
                          target_id=child_rid)
 
-    def test_get_list_all_children(self):
-        url = self.build_url('types', prefix='/v3/' + self.project_id,
-                             child_res="os-volume-type-access")
-        request, response = self.build_api_call('GET', url)
-        event = self.build_event(request, response)
-
-        self.check_event(request, response, event, taxonomy.ACTION_READ,
-                         "storage/volume/type/project-acl", None,
-                         self.service_name)
-
-    def test_get_singleton_child(self):
+    def test_get_custom_list_action(self):
         rid = str(uuid.uuid4().hex)
-        # this property is modelled as custom action
         url = self.build_url('types', prefix='/v3/' + self.project_id,
-                             res_id=rid, child_res="os-volume-type-access")
+                             res_id=rid, suffix="os-volume-type-access")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_READ,
-                         "storage/volume/type/project-acl", rid)
+        self.check_event(request, response, event, taxonomy.ACTION_READ +
+                         "/acl", "storage/volume/type", rid, None,
+                         "success")
 
 
 class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
@@ -420,7 +410,7 @@ class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
     def audit_map(self):
         return self.audit_map_file_fixture
 
-    def test_get_list(self):
+    def test_get_list_shares(self):
         url = self.build_url('shares', prefix='/v2/' + self.project_id)
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
