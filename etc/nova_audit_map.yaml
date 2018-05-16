@@ -13,8 +13,8 @@ resources:
         api_name: os-aggregates
         custom_id: 'aggregate_id'
         custom_actions:
-            add_host: update/add-host
-            remove_host: update/remove-host
+            add_host: update/add/host
+            remove_host: update/remove/host
             set_metadata: update/metadata
     availability-zone:
         api_name: os-availability-zone
@@ -67,16 +67,15 @@ resources:
         # this is a legacy alternative to POST /servers used still in Devstack
         type_uri: compute/servers
         type_name: servers
-    quotas:
+    quota-sets:
         api_name: os-quota-sets
         children:
             defaults:
                 singleton: true
             detail:
                 singleton: true
-    quota-classes:
+    quota-class-sets:
         api_name: os-quota-class-sets
-        el_type_uri: compute/quota-class
     servers:
         payloads:
             exclude:

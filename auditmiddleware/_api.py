@@ -60,7 +60,6 @@ def _make_uuid(s):
 
 class ConfigError(Exception):
     """Error raised when pyCADF fails to configure correctly."""
-
     pass
 
 
@@ -76,7 +75,7 @@ class OpenStackResource(resource.Resource):
         if item in ['project_id', 'domain_id']:
             return None
         else:
-            return super(self, OpenStackResource).__getattribute__(self, item)
+            return super(OpenStackResource, self).__getattribute__(item)
 
 
 def str_map(param):
@@ -84,7 +83,8 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if not isinstance(k, str) or not isinstance(v, str):
+        if not isinstance(k, six.string_types) or\
+                not isinstance(v, six.string_types):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
 
@@ -117,7 +117,8 @@ class OpenStackAuditMiddleware(object):
         self._log = log
 
         try:
-            conf = yaml.safe_load(open(cfg_file, 'r'))
+            with open(cfg_file, 'r') as f:
+                conf = yaml.safe_load(f)
 
             self._payloads_enabled = payloads_enabled
             self._service_type = conf['service_type']
@@ -339,7 +340,7 @@ class OpenStackAuditMiddleware(object):
                                                          res_parent_id,
                                                          request, response,
                                                          subpayload, suffix)
-                    pl = req_pl.next() if req_pl else None
+                    pl = next(req_pl) if req_pl else None
                     if ev:
                         if pl:
                             # attach payload if requested
@@ -393,7 +394,7 @@ class OpenStackAuditMiddleware(object):
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
                                    subpayload, suffix=None):
-        self._log.debug("create event from payload:\n%s", subpayload)
+        self._log.debug("create event from payload: %s", subpayload)
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, suffix)
@@ -408,7 +409,7 @@ class OpenStackAuditMiddleware(object):
         for attr, typeURI in six.iteritems(res_spec.custom_attributes):
             value = subpayload.get(attr)
             if value:
-                if not isinstance(value, basestring):
+                if not isinstance(value, six.string_types):
                     value = json.dumps(value, separators=(',', ':'))
                 attach_val = Attachment(typeURI=typeURI, content=value,
                                         name=attr)

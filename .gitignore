@@ -17,6 +17,7 @@ develop-eggs
 .installed.cfg
 lib
 lib64
+.eggs
 
 # Installer logs
 pip-log.txt
@@ -51,6 +52,7 @@ ChangeLog
 # Editors
 *~
 .*.swp
+.idea
 
 # Oslo Sync
 .update-venv
