@@ -103,6 +103,10 @@ resources:
     custom_actions:
       add_router_interface: update/add/router-interface
       remove_router_interface: update/remove/router-interface
+    custom_attributes:
+      subnet_id: network/subnet
+      port_id: network/port
+      network_id: network/network
   security-groups:
   security-group-rules:
     # does not have a name field, so let's use the description
