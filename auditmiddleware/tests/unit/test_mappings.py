@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from builtins import str
 
 from pycadf import cadftaxonomy as taxonomy
 
@@ -317,12 +318,12 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
     def test_list_namespaced(self):
         url = self.build_url('qos', prefix='/v2.0',
-                             child_res="policies")
+                             child_res="policies/bandwidth_limit_rules")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "network/qos/policies", None,
+                         "network/qos/bandwidth-limit-rules", None,
                          self.service_name)
 
     def test_post_create_multiple(self):
@@ -344,6 +345,10 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
             self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                              "network/network",
                              items[idx]['id'], items[idx]['name'])
+
+    def test_put_custom_action(self):
+        """ "/v2.0/routers/0e7a2b1b-1b1a-428b-97b5-afd1a41c8f74
+        /remove_router_interface" """
 
 
 class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):

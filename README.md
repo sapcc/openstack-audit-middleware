@@ -236,7 +236,7 @@ The configuration option to record request payloads needs some special considera
 * `payloads`: controls which attributes of the request payload may not be attached to the event (e.g. because they contain very sensitive information)
    - `enabled`: set to `false` to disable payload recording for this resource entirely (default: `true`)
    - `exclude`: exclude these payload attributes from the payload attachment (black-list approach, default: `[]`)
-   - `include`: only include these payload attributes in the payload attachment(white-list approach, default: `all)
+   - `include`: only include these payload attributes in the payload attachment(white-list approach, default: all)
 
 In our example this looks like this:
 
