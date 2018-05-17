@@ -68,7 +68,7 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         with mock.patch('oslo_messaging.notify._impl_log.LogDriver.notify') \
                 as driver:
             path = '/v2/' + self.project_id + '/servers'
-            app.get(path)
+            app.get(path, extra_environ=self.get_environ_header())
             # audit middleware conf has 'log' make sure that driver is invoked
             # and not the one specified in oslo_messaging_notifications section
             time.sleep(1)
