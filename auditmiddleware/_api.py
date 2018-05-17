@@ -587,6 +587,8 @@ class OpenStackAuditMiddleware(object):
                     if not action:
                         return self._map_method_to_action(
                             method, res_spec, res_id) + '/' + rest_action
+
+                    return action
                 else:
                     self._log.warning("/action URL without payload: %s",
                                       request.path)

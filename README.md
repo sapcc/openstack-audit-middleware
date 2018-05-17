@@ -185,13 +185,19 @@ The following defines a resource with the typeURI `compute/servers`.
 
 In addition to the basic resource actions implied by the HTTP _method_, OpenStack services can expose custom actions that go beyond CRUD. Two ways how to encoded action names in the HTTP request are common:
   
-  * the last component of the URL path is the action name ([example](https://developer.openstack.org/api-ref/shared-file-system/#id382))
-  * the last component of the URL path is `action` and the payload contains the action name as the first JSON element ([example](https://developer.openstack.org/api-ref/shared-file-system/#grant-access])
+  * *payload-encoded*: the last component of the URL path is the action name ([example](https://developer.openstack.org/api-ref/shared-file-system/#id382))
+  * *path-encoded*: the last component of the URL path is `action` and the payload contains the action name as the first JSON element ([example](https://developer.openstack.org/api-ref/shared-file-system/#grant-access])
   
 Usually all custom actions should be listed in the mapping because otherwise the last path component will be taken as a custom _key_ of the resource or ignored right-away:
 
- * `custom_actions`: map custom action names to the CADF action taxonomy. Otherwise a default mapping `(create|update|delete|read|read/list)` is applied (default: `[]`)
+ * `custom_actions`: map custom action names to the CADF action taxonomy (default: `[]`).
  
+ The mapping of actions is complex: For payload-encoded actions a default-mapping will be applied which determines the primary action (e.g. `update`) from the HTTP method and adds the action name from the payload (e.g. `update/myaction`).
+
+ For path-encoded actions you can reach a similar behaviour with a generic rule of the form `"<method>:*": "<action>"` (e.g. `"POST:*": "read"`). You can refer to the actual action name via `*` (e.g. `"POST:*": "update/*"`). If the right side of the rule is empty, the entire request will be suppressed, so that no event is emitted.
+
+ If there is no rule matching the path suffix, it will be interpreted as a _key_, not as an action. That means that the action will be determined from the HTTP method only and an attachment with the name `key` and the name of the key as `content` will be added to the event.
+
 Attributes of special importance can be added to every update-like event by specifying _custom attributes_:
 
  * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
