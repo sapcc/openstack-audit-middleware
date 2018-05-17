@@ -130,12 +130,12 @@ The following metrics and dimensions are supported
 | openstack_audit_messaging_overflows | Number of lost events due to message queue latency or downtime | |
 | openstack_audit_messaging_errors | Failed attempts to push to message queue, leading to events dumped into log files | |
 
-Customizing the CADF mapping rules
+Mapping Rules
 ==================================
 
-The CADF mapping rules are essentially a model of resources. Due to REST principles, this model implies how the HTTP API requests are formed.
+The creation of audit events is driven by so called _mapping rules_. The CADF mapping rules are essentially a model of resources. Using OpenStack API design patterns, this model implies how the HTTP API requests are formed.
 
-The path of the request specifies the resource that is the target of the request. It consists of a prefix and a resource path. The resource path is denoting the resource. The prefix is used for versioning and routing. Sometimes it is even used to specify the target project of an operation (e.g. in Cinder).
+The path of an HTTP request specifies the resource that is the target of the request. It consists of a prefix and a resource path. The resource path is denoting the resource. The prefix is used for versioning and routing. Sometimes it is even used to specify the target project of an operation (e.g. in Cinder).
 
 In the mapping file, the prefix is specified using a regular expression. In those cases where the prefix contains the target project id, the regular expression needs to capture the relevant part of the prefix using a _named_ match group called
 _project\_id_
@@ -236,7 +236,7 @@ The configuration option to record request payloads needs some special considera
 * `payloads`: controls which attributes of the request payload may not be attached to the event (e.g. because they contain very sensitive information)
    - `enabled`: set to `false` to disable payload recording for this resource entirely (default: `true`)
    - `exclude`: exclude these payload attributes from the payload attachment (black-list approach, default: `[]`)
-   - `include`: only include these payload attributes in the payload attachment(white-list approach, default: `all)
+   - `include`: only include these payload attributes in the payload attachment(white-list approach, default: all)
 
 In our example this looks like this:
 
@@ -252,3 +252,10 @@ In our example this looks like this:
           # filter lengthy fields with no real diagnostic value
           - description
           - links
+
+Undeclared Resources
+--------------------
+
+Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics. They can be recognized by the `X` suffix in the resource name.
+
+When those X-resources show up, the mapping file should be extended with an appropriate resource definition. The reason is that the heuristics to discover and map undeclared resources are not covering all kinds of requests. There are ambiguities. 

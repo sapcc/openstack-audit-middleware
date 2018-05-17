@@ -131,9 +131,13 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         if event_list:
             ev = event_list[0]
             if record_payloads:
-                self.assertIn('attachments', ev, "payload attachment missing")
-                self.assertIn('payload',
-                              [x['name'] for x in ev['attachments']])
+                self.assertIn('attachments', ev,
+                              "attachments missing (and thus no payload att.)")
+                payload_attachment = [x['name'] for x in ev['attachments']]
+                self.assertIn('payload', payload_attachment,
+                              'payload attachment missing')
+                self.assertEquals(1, payload_attachment.count('payload'),
+                                  "too many payload attachments")
             else:
                 self.assertNotIn('payload',
                                  [x['name'] for x in ev.get('attachments',

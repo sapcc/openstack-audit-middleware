@@ -157,49 +157,51 @@ class OpenStackAuditMiddleware(object):
         result = {}
 
         for name, s in six.iteritems(res_dict):
-            if not s:
-                spec = {}
-            else:
-                spec = s
-
-            if parent_type_uri:
-                pfx = parent_type_uri
-            else:
-                pfx = self._service_type
-
-            rest_name = spec.get('api_name', name)
-            singleton = spec.get('singleton', False)
-            type_name = spec.get('type_name')
-            if not type_name:
-                type_name = rest_name.replace('-', '_')
-                if type_name.startswith('os_'):
-                    type_name = type_name[3:]
-            type_uri = spec.get('type_uri', pfx + "/" + name)
-            el_type_name = None
-            el_type_uri = None
-            childs_parent_type_uri = None
-            if not singleton:
-                el_type_name = spec.get('el_type_name', type_name[:-1])
-                el_type_uri = type_uri[:-1]
-                childs_parent_type_uri = el_type_uri
-            else:
-                childs_parent_type_uri = type_uri
-
-            res_spec = ResourceSpec(type_name, el_type_name,
-                                    type_uri, el_type_uri, singleton,
-                                    spec.get('custom_id', 'id'),
-                                    spec.get('custom_name', 'name'),
-                                    str_map(spec.get('custom_actions')),
-                                    str_map(spec.get('custom_attributes')),
-                                    self._build_audit_map(
-                                        spec.get('children', {}),
-                                        childs_parent_type_uri),
-                                    payloads_map(spec.get('payloads')))
+            res_spec, rest_name = self._build_res_spec(name, parent_type_uri,
+                                                       s)
 
             # ensure that cust
             result[rest_name] = res_spec
 
         return result
+
+    def _build_res_spec(self, name, parent_type_uri, spec):
+        if not spec:
+            spec = {}
+        else:
+            spec = spec
+        if parent_type_uri:
+            pfx = parent_type_uri
+        else:
+            pfx = self._service_type
+        rest_name = spec.get('api_name', name)
+        singleton = spec.get('singleton', False)
+        type_name = spec.get('type_name')
+        if not type_name:
+            type_name = rest_name.replace('-', '_')
+            if type_name.startswith('os_'):
+                type_name = type_name[3:]
+        type_uri = spec.get('type_uri', pfx + "/" + name)
+        el_type_name = None
+        el_type_uri = None
+        childs_parent_type_uri = None
+        if not singleton:
+            el_type_name = spec.get('el_type_name', type_name[:-1])
+            el_type_uri = type_uri[:-1]
+            childs_parent_type_uri = el_type_uri
+        else:
+            childs_parent_type_uri = type_uri
+        res_spec = ResourceSpec(type_name, el_type_name,
+                                type_uri, el_type_uri, singleton,
+                                spec.get('custom_id', 'id'),
+                                spec.get('custom_name', 'name'),
+                                str_map(spec.get('custom_actions')),
+                                str_map(spec.get('custom_attributes')),
+                                self._build_audit_map(
+                                    spec.get('children', {}),
+                                    childs_parent_type_uri),
+                                payloads_map(spec.get('payloads')))
+        return res_spec, rest_name
 
     def create_events(self, request, response=None):
         # drop the endpoint's path prefix
@@ -209,6 +211,7 @@ class OpenStackAuditMiddleware(object):
                            request.path)
             return None
 
+        # normalize url: remove trailing slash and .json suffix
         path = path[:-1] if path.endswith('/') else path
         path = path[:-5] if path.endswith('.json') else path
         return self._build_events(target_project, self._resource_specs,
@@ -243,14 +246,13 @@ class OpenStackAuditMiddleware(object):
         # handle the current token
         if isinstance(res_spec, dict):
             # the node contains a dict => handle token as resource name
-            res_spec = res_spec.get(token)
-            if res_spec is None:
-                # no such name, ignore/filter the resource
-                self._log.debug("unknown resource: %s", token)
+            sub_res_spec = res_spec.get(token)
+            if sub_res_spec is None:
+                # create resource spec on demand
+                sub_res_spec = self.register_resource(None, token)
+                res_spec[token] = sub_res_spec
 
-                return None
-
-            return self._build_events(target_project, res_spec, None, None,
+            return self._build_events(target_project, sub_res_spec, None, None,
                                       request,
                                       response,
                                       path, next_pos)
@@ -275,11 +277,40 @@ class OpenStackAuditMiddleware(object):
                 return self._create_events(target_project, res_id,
                                            res_parent_id, res_spec, request,
                                            response, token)
+            else:
+                # create resource spec on demand
+                res_spec.children[token] = self.register_resource(
+                    res_spec.el_type_uri,
+                    token)
+
+                # repeat same call with res_spec now existing
+                return self._build_events(target_project, res_spec, res_id,
+                                          res_parent_id, request, response,
+                                          path, cursor)
 
         self._log.warning(
             "Unexpected continuation of resource path after segment %s: %s",
             token, request.path)
         return None
+
+    def register_resource(self, parent_type_uri, token):
+        """ Register an unknown resource to avoid missed events.
+        The resulting events are a bit raw but contain enough information
+        to understand what happened. This allows for incremental
+        improvement.
+        """
+        self._log.warn("unknown resource: %s (created on demand)",
+                       token)
+        res_name = token.replace('_', '-')
+        if res_name.startswith('os-'):
+            res_name = res_name[3:]
+        res_name = 'X' + res_name
+        res_dict = {'api_name': token}
+        sub_res_spec, _ = self._build_res_spec(res_name,
+                                               parent_type_uri,
+                                               res_dict)
+
+        return sub_res_spec
 
     def _create_events(self, target_project, res_id,
                        res_parent_id,
@@ -302,6 +333,7 @@ class OpenStackAuditMiddleware(object):
                 if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = iter(request.json.get(res_spec.type_name))
 
+                # create one event per item
                 for subpayload in res_pl:
                     ev = self._create_event_from_payload(target_project,
                                                          res_spec,
@@ -312,6 +344,7 @@ class OpenStackAuditMiddleware(object):
                     pl = next(req_pl) if req_pl else None
                     if ev:
                         if pl:
+                            # attach payload if requested
                             self._attach_payload(ev, pl, res_spec)
                         events.append(ev)
 
@@ -330,7 +363,7 @@ class OpenStackAuditMiddleware(object):
                 if not event:
                     return []
 
-                # attach payload if configured
+                # attach payload if requested
                 if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = request.json
                     # remove possible wrapper elements
@@ -446,14 +479,6 @@ class OpenStackAuditMiddleware(object):
             reason=event_reason,
             target=target)
         event.requestPath = request.path_qs
-
-        #
-        if key and request.method[0] == 'P' and self._payloads_enabled and \
-                res_spec.payloads['enabled']:
-            req_pl = request.json
-            # remove possible wrapper elements
-            req_pl = req_pl.get(res_spec.el_type_name, req_pl)
-            self._attach_payload(event, req_pl, res_spec)
 
         # TODO add reporter step again?
         # event.add_reporterstep(

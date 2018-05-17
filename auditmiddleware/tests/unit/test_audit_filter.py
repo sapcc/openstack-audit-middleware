@@ -460,22 +460,29 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
                          "/unknown", "compute/server", rid)
 
-    def test_post_resource_filtered(self):
+    def test_post_resource_undeclared(self):
         rid = str(uuid.uuid4().hex)
-        url = self.build_url('servers', prefix='/v2/' + self.project_id,
-                             suffix="unknown_action", res_id=rid,
-                             child_res_id="unknown")
-        request, response = self.build_api_call('POST', url, req_json={})
+        rname = "myname"
+        url = self.build_url('yetunknowns', prefix='/v2/' + self.project_id)
+        request, response = self.build_api_call('POST', url,
+                                                resp_json={'yetunknown': {
+                                                    'id': rid, 'name': rname}})
         event = self.build_event(request, response)
 
-        self.assertIsNone(event, "unknown child resources should be ignored")
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/Xyetunknown", rid, rname)
 
-    def test_put_resource_filtered(self):
-        url = self.build_url('unknown', prefix='/v2/' + self.project_id)
+    def test_put_resource_undeclared(self):
+        rid = str(uuid.uuid4().hex)
+        rid2 = str(uuid.uuid4().hex)
+        url = self.build_url('yetunknowns', prefix='/v2/' + self.project_id,
+                             res_id=rid, child_res="uchilds",
+                             child_res_id=rid2)
         request, response = self.build_api_call('PUT', url, req_json={})
         event = self.build_event(request, response)
 
-        self.assertIsNone(event, "unknown resources should be ignored")
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
+                         "compute/Xyetunknown/Xuchild", rid2)
 
     def test_post_action_no_response(self):
         rid = str(uuid.uuid4().hex)
