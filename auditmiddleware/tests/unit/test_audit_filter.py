@@ -470,7 +470,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "compute/yetunknown", rid, rname)
+                         "compute/Xyetunknown", rid, rname)
 
     def test_put_resource_undeclared(self):
         rid = str(uuid.uuid4().hex)
@@ -482,7 +482,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
-                         "compute/yetunknown/uchild", rid2)
+                         "compute/Xyetunknown/Xuchild", rid2)
 
     def test_post_action_no_response(self):
         rid = str(uuid.uuid4().hex)

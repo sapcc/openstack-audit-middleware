@@ -298,7 +298,8 @@ class OpenStackAuditMiddleware(object):
         res_name = token.replace('_', '-')
         if res_name.startswith('os-'):
             res_name = res_name[3:]
-        res_dict = {'X' + res_name: {'api_name': token}}
+        res_name = 'X' + res_name
+        res_dict = {'api_name': token}
         sub_res_spec, _ = self._build_res_spec(res_name,
                                                parent_type_uri,
                                                res_dict)
