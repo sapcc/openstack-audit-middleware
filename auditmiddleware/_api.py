@@ -38,11 +38,11 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
 
 # default mappings from HTTP methods to CADF actions
 _method_action_map = {'GET': taxonomy.ACTION_READ,
-                     'HEAD': taxonomy.ACTION_READ,
-                     'PUT': taxonomy.ACTION_UPDATE,
-                     'PATCH': taxonomy.ACTION_UPDATE, 'POST':
-                         taxonomy.ACTION_CREATE,
-                     'DELETE': taxonomy.ACTION_DELETE}
+                      'HEAD': taxonomy.ACTION_READ,
+                      'PUT': taxonomy.ACTION_UPDATE,
+                      'PATCH': taxonomy.ACTION_UPDATE, 'POST':
+                          taxonomy.ACTION_CREATE,
+                      'DELETE': taxonomy.ACTION_DELETE}
 # action suffixes for operations on custom keys (modelled as path suffixes)
 _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_UPDATE: '/set',
@@ -418,7 +418,6 @@ class OpenStackAuditMiddleware(object):
     def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
                            request, response, suffix):
 
-
         action, key = self._get_action_and_key(res_spec, res_id, request,
                                                suffix)
         if not action:
@@ -459,7 +458,7 @@ class OpenStackAuditMiddleware(object):
                                                   key=key)
             target.name = self._service_name
 
-        observer = self._create_observer_resource(request)
+        observer = self._create_observer_resource()
 
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
@@ -538,7 +537,7 @@ class OpenStackAuditMiddleware(object):
 
         return target
 
-    def _create_observer_resource(self, req):
+    def _create_observer_resource(self):
         """Build target resource."""
 
         observer = resource.Resource(typeURI='service/' + self._service_type,
@@ -557,7 +556,7 @@ class OpenStackAuditMiddleware(object):
                                                 res_id), None
 
         if suffix == 'action':
-            return self._get_action_from_payload(request, res_spec, res_id),\
+            return self._get_action_from_payload(request, res_spec, res_id), \
                    None
 
         return self._get_action_and_key_from_path_suffix(
@@ -582,7 +581,7 @@ class OpenStackAuditMiddleware(object):
         return _method_action_map[method]
 
     def _get_action_and_key_from_path_suffix(self, path_suffix, method,
-                                           res_spec, res_id):
+                                             res_spec, res_id):
         """Determine the CADF action from the URL path
         """
 
