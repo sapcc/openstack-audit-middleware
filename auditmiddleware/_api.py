@@ -36,16 +36,18 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
                                        'custom_actions', 'custom_attributes',
                                        'children', 'payloads'])
 
-method_action_map = {'GET': taxonomy.ACTION_READ,
+# default mappings from HTTP methods to CADF actions
+_method_action_map = {'GET': taxonomy.ACTION_READ,
                      'HEAD': taxonomy.ACTION_READ,
                      'PUT': taxonomy.ACTION_UPDATE,
                      'PATCH': taxonomy.ACTION_UPDATE, 'POST':
                          taxonomy.ACTION_CREATE,
                      'DELETE': taxonomy.ACTION_DELETE}
-action_suffix_map = {taxonomy.ACTION_READ: '/get',
-                     taxonomy.ACTION_UPDATE: '/set',
-                     taxonomy.ACTION_CREATE: '/put',
-                     taxonomy.ACTION_DELETE: '/unset'}
+# action suffixes for operations on custom keys (modelled as path suffixes)
+_key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
+                          taxonomy.ACTION_UPDATE: '/set',
+                          taxonomy.ACTION_CREATE: '/put',
+                          taxonomy.ACTION_DELETE: '/unset'}
 
 # matcher for UUIDs
 _UUID_RE = re.compile("[0-9a-f\-]+$")
@@ -83,7 +85,7 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if not isinstance(k, six.string_types) or\
+        if not isinstance(k, six.string_types) or \
                 not isinstance(v, six.string_types):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
@@ -220,11 +222,6 @@ class OpenStackAuditMiddleware(object):
     def _build_events(self, target_project, res_spec, res_id, res_parent_id,
                       request, response, path, cursor=0):
         """ Parse a resource request recursively and build CADF events from it
-
-        :param res_tree:
-        :param path:
-        :param cursor:
-        :return: an array of built events
         """
 
         # Check if the end of path is reached and event can be created finally
@@ -420,18 +417,12 @@ class OpenStackAuditMiddleware(object):
 
     def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
                            request, response, suffix):
-        action = self._get_action(res_spec, res_id, request, suffix)
-        key = None
-        if not action:
-            # ignored unknown actions
-            if suffix == 'action':
-                return None
 
-            # suffix must be a key
-            key = suffix
-            # determine action from method (never None)
-            action = self._get_action(res_spec, res_id, request, None)
-            action += action_suffix_map[action]
+
+        action, key = self._get_action_and_key(res_spec, res_id, request,
+                                               suffix)
+        if not action:
+            return None
 
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
         domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
@@ -489,7 +480,11 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    def _attach_payload(self, event, payload, res_spec):
+    @staticmethod
+    def _attach_payload(event, payload, res_spec):
+        """Attach request payload to event
+        """
+
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
         res_payload = {}
@@ -514,7 +509,8 @@ class OpenStackAuditMiddleware(object):
 
         event.add_attachment(attach_val)
 
-    def _create_target_resource(self, target_project, res_spec, res_id,
+    @staticmethod
+    def _create_target_resource(target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
         """ builds a target resource from payload
         """
@@ -535,6 +531,7 @@ class OpenStackAuditMiddleware(object):
         target = OpenStackResource(project_id=project_id, id=rid,
                                    typeURI=type_uri, name=name)
 
+        # provide name of custom keys in attachment of target
         if key:
             target.add_attachment(Attachment(typeURI="xs:string",
                                              content=key, name='key'))
@@ -543,24 +540,34 @@ class OpenStackAuditMiddleware(object):
 
     def _create_observer_resource(self, req):
         """Build target resource."""
+
         observer = resource.Resource(typeURI='service/' + self._service_type,
                                      id=self._service_id,
                                      name=self._service_name)
 
         return observer
 
-    def _get_action(self, res_spec, res_id, request, suffix):
-        """Given a resource spec, a request and a path suffix, deduct
-        the correct CADF action.
+    def _get_action_and_key(self, res_spec, res_id, request, suffix):
+        """Determine the CADF action and key from
+        the request method, path and payload
         """
-        method = request.method
+
         if suffix is None:
-            return self._map_method_to_action(method, res_spec, res_id)
+            return self._get_action_from_method(request.method, res_spec,
+                                                res_id), None
 
-        return self._map_action_suffix(res_spec, suffix, method,
-                                       res_id, request)
+        if suffix == 'action':
+            return self._get_action_from_payload(request, res_spec, res_id),\
+                   None
 
-    def _map_method_to_action(self, method, res_spec, res_id):
+        return self._get_action_and_key_from_path_suffix(
+            suffix, request.method, res_spec, res_id)
+
+    @staticmethod
+    def _get_action_from_method(method, res_spec, res_id):
+        """Determine the CADF action from the HTTP method
+        """
+
         if method == 'POST':
             if res_id or res_spec.singleton:
                 return taxonomy.ACTION_UPDATE
@@ -572,61 +579,75 @@ class OpenStackAuditMiddleware(object):
         elif method == "PATCH":
             return taxonomy.ACTION_UPDATE
 
-        return method_action_map[method]
+        return _method_action_map[method]
 
-    def _map_action_suffix(self, res_spec, action_suffix, method, res_id,
-                           request):
-        rest_action = ''
-        if action_suffix == 'action':
-            try:
-                payload = request.json
-                if payload:
-                    rest_action = next(iter(payload))
-                    # check for individual mapping of action
-                    action = res_spec.custom_actions.get(rest_action)
-                    if not action:
-                        return self._map_method_to_action(
-                            method, res_spec, res_id) + '/' + rest_action
+    def _get_action_and_key_from_path_suffix(self, path_suffix, method,
+                                           res_spec, res_id):
+        """Determine the CADF action from the URL path
+        """
 
-                    return action
-                else:
-                    self._log.warning("/action URL without payload: %s",
-                                      request.path)
-                    return None
-            except ValueError:
-                self._log.warning(
-                    "unexpected empty action payload for path: %s",
-                    request.path)
-                return None
-        else:
-            rest_action = action_suffix
-
+        rest_action = path_suffix
         # check for individual mapping of action
         action = res_spec.custom_actions.get(rest_action)
         if action is not None:
-            return action
+            return action, None
 
         # check for generic mapping
         action = res_spec.custom_actions.get(method + ':*')
-        if action is not None and action is not '':
-            return action.replace('*', rest_action)
+        if action is not None:
+            if action is not '':
+                return action.replace('*', rest_action), None
+            else:
+                # action suppressed by intention
+                return None, None
 
-        # no action mapped to suffix
-        self._log.debug("unknown action: %s", rest_action)
-        return None
+        # no action mapped to suffix => custom key
+        action = self._get_action_from_method(method, res_spec, res_id)
+        action += _key_action_suffix_map[action]
+        return action, path_suffix
+
+    def _get_action_from_payload(self, request, res_spec, res_id):
+        """Read the action name from the payload (OpenStack pattern)
+        """
+
+        try:
+            payload = request.json
+            if payload:
+                rest_action = next(iter(payload))
+                # check for individual mapping of action
+                action = res_spec.custom_actions.get(rest_action)
+                if action is not None:
+                    return action
+
+                # apply generic default mapping rule here
+                return self._get_action_from_method(
+                    request.method, res_spec, res_id) + '/' + rest_action
+            else:
+                self._log.warning("/action URL without payload: %s",
+                                  request.path)
+                return None
+        except ValueError:
+            self._log.warning(
+                "unexpected empty action payload for path: %s",
+                request.path)
+            return None
 
     @staticmethod
     def _build_service_id(name):
+        """Invent stable UUID for the service itself
+        """
+
         md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
         ns = uuid.UUID(md5_hash.hexdigest())
         return str(uuid.uuid5(ns, socket.getfqdn()))
 
     def _strip_url_prefix(self, request):
         """ Removes the prefix from the URL paths
-        :param req: incoming request
+        :param request: incoming request
         :return: URL request path without the leading prefix or None if prefix
         was missing and optional target tenant or None
         """
+
         g = self._prefix_re.match(request.path)
         if g:
             path = request.path[g.end():]
