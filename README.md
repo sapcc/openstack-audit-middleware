@@ -256,6 +256,6 @@ In our example this looks like this:
 Undeclared Resources
 --------------------
 
-Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics. They can be recognized by the `X` prefix in the resource name.
+Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics. They can be recognized by the `X` suffix in the resource name.
 
 When those X-resources show up, the mapping file should be extended with an appropriate resource definition. The reason is that the heuristics to discover and map undeclared resources are not covering all kinds of requests. There are ambiguities. 
