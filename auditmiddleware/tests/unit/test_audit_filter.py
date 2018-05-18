@@ -410,8 +410,34 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
         # attachments should be produced on actions
         self.assertIn("attachments", event)
+        self.assertEqual(event['attachments'][0]['name'], "payload")
         self.assertEqual(json.loads(event['attachments'][0]['content']),
                          req_json)
+
+    def test_post_action_generic(self):
+        """test generic rules for path-encoded actions: suppress event via null
+        e.g. "POST:*": null"
+        """
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             suffix="suppressed", res_id=rid)
+        request, response = self.build_api_call('POST', url)
+        event = self.build_event(request, response)
+
+        self.assertEqual(None, event, "Event should have been suppressed")
+
+    def test_get_action_generic(self):
+        """test generic rules for path-encoded actions
+        e.g. "GET:*": "read/*"
+        """
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             suffix="generic", res_id=rid)
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, "read/generic",
+                         "compute/server", rid)
 
     def test_put_key(self):
         rid = str(uuid.uuid4().hex)

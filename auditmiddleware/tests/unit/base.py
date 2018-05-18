@@ -38,6 +38,8 @@ resources:
             createBackup: backup
             confirmResize: update/resize-confirm
             detail: read/list/details
+            "POST:*": null
+            "GET:*": "read/*"
         custom_attributes:
             custom_attr: "xs:string"
             custom_attr2: "/data/compute/server/custom"

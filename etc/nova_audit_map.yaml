@@ -48,7 +48,7 @@ resources:
         api_name: os-instance-usage-audit-log
         singleton: true
         custom_actions:
-            # last path segment is used as filter parameter for list
+            # last path segment is used as filter parameter for list (timestamp)
             'GET:*': 'read'
     keypairs:
         api_name: os-keypairs
@@ -93,6 +93,10 @@ resources:
             lock: disable/lock
             migrate: update/migrate
             os-getConsoleOutput: read/console
+            os-getRDPConsole: update/start-console
+            os-getSerialConsole: update/start-console
+            os-getSPICEConsole: update/start-console
+            os-getVNCConsole: update/start-console
             os-migrateLive: update/migrate/live
             os-resetState: update/set/status
             os-start: start
