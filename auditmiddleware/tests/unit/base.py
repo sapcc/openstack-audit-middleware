@@ -38,6 +38,7 @@ resources:
             createBackup: backup
             confirmResize: update/resize-confirm
             detail: read/list/details
+            suppressed: null
             "POST:*": null
             "GET:*": "read/*"
         custom_attributes:

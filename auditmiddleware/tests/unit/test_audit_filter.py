@@ -414,7 +414,19 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(json.loads(event['attachments'][0]['content']),
                          req_json)
 
-    def test_post_action_generic(self):
+    def test_post_action_generic_suppressed(self):
+        """test generic rules for path-encoded actions: suppress event via null
+        e.g. "POST:*": null"
+        """
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             suffix="arbitrary", res_id=rid)
+        request, response = self.build_api_call('POST', url)
+        event = self.build_event(request, response)
+
+        self.assertEqual(None, event, "Event should have been suppressed")
+
+    def test_post_action_suppressed(self):
         """test generic rules for path-encoded actions: suppress event via null
         e.g. "POST:*": null"
         """
