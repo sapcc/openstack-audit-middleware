@@ -4,6 +4,8 @@
   * Nova
   * Neutron
   * Cinder
+  * Designate
+  * Manila
 
 Additional APIs can be supported without major code changes through templates.
 
@@ -194,7 +196,7 @@ Usually all custom actions should be listed in the mapping because otherwise the
  
  The mapping of actions is complex: For payload-encoded actions a default-mapping will be applied which determines the primary action (e.g. `update`) from the HTTP method and adds the action name from the payload (e.g. `update/myaction`).
 
- For path-encoded actions you can reach a similar behaviour with a generic rule of the form `"<method>:*": "<action>"` (e.g. `"POST:*": "read"`). You can refer to the actual action name via `*` (e.g. `"POST:*": "update/*"`). If the right side of the rule is empty, the entire request will be suppressed, so that no event is emitted.
+ For path-encoded actions you can reach a similar behaviour with a generic rule of the form `"<method>:*": "<action>"` (e.g. `"POST:*": "read"`). You can refer to the actual action name in the path via `*` (e.g. `"POST:*": "update/*"`). If the right side of the rule is `null, the `entire request will be suppressed, so that no event is emitted (e.g. `"POST:*": null`).
 
  If there is no rule matching the path suffix, it will be interpreted as a _key_, not as an action. That means that the action will be determined from the HTTP method only and an attachment with the name `key` and the name of the key as `content` will be added to the event.
 

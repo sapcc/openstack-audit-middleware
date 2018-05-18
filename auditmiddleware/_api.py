@@ -85,8 +85,8 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if not isinstance(k, six.string_types) or \
-                not isinstance(v, six.string_types):
+        if v is not None and (not isinstance(k, six.string_types) or
+                              not isinstance(v, six.string_types)):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
 
@@ -592,9 +592,10 @@ class OpenStackAuditMiddleware(object):
             return action, None
 
         # check for generic mapping
-        action = res_spec.custom_actions.get(method + ':*')
-        if action is not None:
-            if action is not '':
+        rule = method + ':*'
+        if rule in res_spec.custom_actions:
+            action = res_spec.custom_actions.get(rule)
+            if action is not None:
                 return action.replace('*', rest_action), None
             else:
                 # action suppressed by intention
