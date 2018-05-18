@@ -556,8 +556,8 @@ class OpenStackAuditMiddleware(object):
                                                 res_id), None
 
         if suffix == 'action':
-            return self._get_action_from_payload(request, res_spec, res_id), \
-                   None
+            action = self._get_action_from_payload(request, res_spec, res_id)
+            return action, None
 
         return self._get_action_and_key_from_path_suffix(
             suffix, request.method, res_spec, res_id)
