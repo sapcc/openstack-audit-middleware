@@ -424,6 +424,7 @@ class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "storage/share/shares",
                          None, self.service_name)
 
+
 class DesignateAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
         super(DesignateAuditMappingTest, self).setUp()
