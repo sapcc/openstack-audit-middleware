@@ -423,3 +423,28 @@ class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_LIST,
                          "storage/share/shares",
                          None, self.service_name)
+
+class DesignateAuditMappingTest(base.BaseAuditMiddlewareTest):
+    def setUp(self):
+        super(DesignateAuditMappingTest, self).setUp()
+
+        self.audit_map_file_fixture = "etc/designate_audit_map.yaml"
+
+        self.audit_map_file_fixture = os.path.realpath(
+            self.audit_map_file_fixture)
+
+        self.service_name = 'designate'
+        self.service_type = 'service/dns'
+
+    @property
+    def audit_map(self):
+        return self.audit_map_file_fixture
+
+    def test_get_list_zones(self):
+        url = self.build_url('zones', prefix='/v2')
+        request, response = self.build_api_call('GET', url)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_LIST,
+                         "service/dns/zones",
+                         None, self.service_name)
