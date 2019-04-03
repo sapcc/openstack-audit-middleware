@@ -321,7 +321,7 @@ class OpenStackAuditMiddleware(object):
             res_payload = response.json
 
             # check for bulk-operation
-            if not res_spec.singleton and \
+            if not res_spec.singleton and res_payload and \
                     isinstance(res_payload.get(res_spec.type_name), list):
                 # payloads contain an attribute named like the resource
                 # which contains a list of items
@@ -347,8 +347,9 @@ class OpenStackAuditMiddleware(object):
 
             else:
                 # remove possible wrapper elements
-                res_payload = res_payload.get(res_spec.el_type_name,
-                                              res_payload)
+                if res_payload:
+                    res_payload = res_payload.get(res_spec.el_type_name,
+                                                  res_payload)
 
                 event = self._create_event_from_payload(target_project,
                                                         res_spec,
@@ -364,7 +365,8 @@ class OpenStackAuditMiddleware(object):
                 if self._payloads_enabled and res_spec.payloads['enabled']:
                     req_pl = request.json
                     # remove possible wrapper elements
-                    req_pl = req_pl.get(res_spec.el_type_name, req_pl)
+                    if req_pl:
+                      req_pl = req_pl.get(res_spec.el_type_name, req_pl)
                     self._attach_payload(event, req_pl, res_spec)
 
                 events.append(event)
@@ -487,13 +489,13 @@ class OpenStackAuditMiddleware(object):
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
         res_payload = {}
-        if excl:
+        if excl and payload:
             res_payload = payload
             # remove possible wrapper elements
             for k in excl:
                 if k in res_payload:
                     del res_payload[k]
-        elif incl:
+        elif incl and payload:
             for k in incl:
                 v = payload.get(k)
                 if v:
