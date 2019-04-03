@@ -462,7 +462,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=payload_content)
         event = self.build_event(request, response, record_payloads=True)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE + \
                          "/set",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
@@ -495,7 +495,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url,
                                                 req_json={"unknown": "bla"})
         event = self.build_event(request, response)
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE + \
                          "/unknown", "compute/server", rid)
 
     def test_post_resource_undeclared(self):
