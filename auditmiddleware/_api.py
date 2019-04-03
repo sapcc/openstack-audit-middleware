@@ -85,7 +85,7 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if v is not None and (not isinstance(k, six.string_types) \
+        if v is not None and (not isinstance(k, six.string_types)
                               or not isinstance(v, six.string_types)):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
@@ -104,9 +104,9 @@ def payloads_map(param):
 
 def _make_tags(ev):
     return [
-        'project_id:{0}'.format(ev.target.project_id \
-                                or ev.initiator.project_id \
-                                or ev.initiator.domain_id),
+        'project_id:{0}'.format(ev.target.project_id or
+                                ev.initiator.project_id or
+                                ev.initiator.domain_id),
         'target_type_uri:{0}'.format(ev.target.typeURI),
         'action:{0}'.format(ev.action),
         'outcome:{0}'.format(ev.outcome)]
