@@ -155,8 +155,8 @@ class DisableModuleFixture(fixtures.Fixture):
     def clear_module(self):
         cleared_modules = {}
         for fullname in list(sys.modules.keys()):
-            if (fullname == self.module or
-                    fullname.startswith(self.module + '.')):
+            if (fullname == self.module
+                    or fullname.startswith(self.module + '.')):
                 cleared_modules[fullname] = sys.modules.pop(fullname)
         return cleared_modules
 
