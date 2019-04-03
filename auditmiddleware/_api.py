@@ -50,7 +50,7 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_DELETE: '/unset'}
 
 # matcher for UUIDs
-_UUID_RE = re.compile("[0-9a-f\-]+$")
+_UUID_RE = re.compile("[0-9a-f-]+$")
 
 
 def _make_uuid(s):
@@ -85,8 +85,8 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if v is not None and (not isinstance(k, six.string_types) or
-                              not isinstance(v, six.string_types)):
+        if v is not None and (not isinstance(k, six.string_types)
+                              or not isinstance(v, six.string_types)):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
 
@@ -104,9 +104,9 @@ def payloads_map(param):
 
 def _make_tags(ev):
     return [
-        'project_id:{0}'.format(ev.target.project_id or
-                                ev.initiator.project_id or
-                                ev.initiator.domain_id),
+        'project_id:{0}'.format(ev.target.project_id
+                                or ev.initiator.project_id
+                                or ev.initiator.domain_id),
         'target_type_uri:{0}'.format(ev.target.typeURI),
         'action:{0}'.format(ev.action),
         'outcome:{0}'.format(ev.outcome)]
@@ -524,8 +524,8 @@ class OpenStackAuditMiddleware(object):
             name = payload.get(res_spec.name_field)
             rid = rid or payload.get(res_spec.id_field)
 
-            project_id = (target_project or payload.get('project_id') or
-                          payload.get('tenant_id'))
+            project_id = (target_project or payload.get('project_id')
+                          or payload.get('tenant_id'))
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
