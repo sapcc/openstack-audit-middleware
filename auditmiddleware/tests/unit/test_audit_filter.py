@@ -88,7 +88,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_patch_custom_attr(self):
         rid = str(uuid.uuid4().hex)
-        custom_value = {'child1': 'test', 'child2': 'test-two'}
+        custom_value = {'child1': 'test'}
         # such API does not exist in Nova
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
