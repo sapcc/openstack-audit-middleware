@@ -104,9 +104,9 @@ def payloads_map(param):
 
 def _make_tags(ev):
     return [
-        'project_id:{0}'.format(ev.target.project_id or
-                                ev.initiator.project_id or
-                                ev.initiator.domain_id),
+        'project_id:{0}'.format(ev.target.project_id
+                                or ev.initiator.project_id
+                                or ev.initiator.domain_id),
         'target_type_uri:{0}'.format(ev.target.typeURI),
         'action:{0}'.format(ev.action),
         'outcome:{0}'.format(ev.outcome)]
@@ -366,7 +366,7 @@ class OpenStackAuditMiddleware(object):
                     req_pl = request.json
                     # remove possible wrapper elements
                     if req_pl:
-                      req_pl = req_pl.get(res_spec.el_type_name, req_pl)
+                        req_pl = req_pl.get(res_spec.el_type_name, req_pl)
                     self._attach_payload(event, req_pl, res_spec)
 
                 events.append(event)
@@ -524,7 +524,7 @@ class OpenStackAuditMiddleware(object):
             name = payload.get(res_spec.name_field)
             rid = rid or payload.get(res_spec.id_field)
 
-            project_id = (target_project or payload.get('project_id') \
+            project_id = (target_project or payload.get('project_id')
                           or payload.get('tenant_id'))
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
