@@ -145,9 +145,9 @@ class DisableModuleFixture(fixtures.Fixture):
         self.module = module
         self._finders = []
         self._cleared_modules = {}
+        self.addCleanup(self._tearDown)
 
-    def tearDown(self):
-        super(DisableModuleFixture, self).tearDown()
+    def _tearDown(self):
         for finder in self._finders:
             sys.meta_path.remove(finder)
         sys.modules.update(self._cleared_modules)
