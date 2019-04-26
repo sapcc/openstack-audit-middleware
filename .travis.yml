@@ -22,4 +22,5 @@ matrix:
 install:
 - pip install tox-travis
 - pip install discover
+- pip install coverage
 script: tox
