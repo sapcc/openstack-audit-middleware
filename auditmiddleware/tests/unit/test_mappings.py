@@ -104,6 +104,22 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.assertIn(key_attachment, event['target']['attachments'],
                       "attachment should contain key force-down")
 
+    def test_put_key(self):
+        url = self.build_url('servers', prefix='/compute/v2.1',
+                             res_id="c489798d-8031-406d-aabb-0040a3b7b4be",
+                             child_res="tags", suffix="tag-1234")
+        request, response = self.build_api_call('PUT', url)
+        event = self.build_event(request, response)
+
+        print event
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
+                         + "/set", "compute/server/tags",
+                         "c489798d-8031-406d-aabb-0040a3b7b4be")
+        key_attachment = {'typeURI': 'xs:string', 'content': 'tag-1234',
+                          'name': 'key'}
+        self.assertIn(key_attachment, event['target']['attachments'],
+                      "attachment should contain tags")
+
 
 class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
