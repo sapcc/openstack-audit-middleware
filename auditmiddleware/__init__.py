@@ -84,9 +84,10 @@ def _log_and_ignore_error(fn):
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             _LOG.exception('An exception occurred processing '
-                           'the API call: %s ', e)
+                           'the API call with args: {0}{1}'
+                           .format(args, kwargs))
 
     return wrapper
 

@@ -296,8 +296,8 @@ class OpenStackAuditMiddleware(object):
         to understand what happened. This allows for incremental
         improvement.
         """
-        self._log.warn("unknown resource: %s (created on demand)",
-                       token)
+        self._log.warning("unknown resource: %s (created on demand)",
+                          token)
         res_name = token.replace('_', '-')
         if res_name.startswith('os-'):
             res_name = res_name[3:]
@@ -362,10 +362,12 @@ class OpenStackAuditMiddleware(object):
                     return []
 
                 # attach payload if requested
-                if self._payloads_enabled and res_spec.payloads['enabled']:
+                if self._payloads_enabled and res_spec.payloads['enabled'] \
+                   and request.content_length > 0 \
+                   and request.content_type == "application/json":
                     req_pl = request.json
                     # remove possible wrapper elements
-                    if req_pl:
+                    if isinstance(req_pl, dict):
                         req_pl = req_pl.get(res_spec.el_type_name, req_pl)
                     self._attach_payload(event, req_pl, res_spec)
 
@@ -489,13 +491,13 @@ class OpenStackAuditMiddleware(object):
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
         res_payload = {}
-        if excl and payload:
+        if excl and isinstance(payload, dict):
             res_payload = payload
             # remove possible wrapper elements
             for k in excl:
                 if k in res_payload:
                     del res_payload[k]
-        elif incl and payload:
+        elif incl and isinstance(payload, dict):
             for k in incl:
                 v = payload.get(k)
                 if v:
