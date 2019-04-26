@@ -111,7 +111,6 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('PUT', url)
         event = self.build_event(request, response)
 
-        print event
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE
                          + "/set", "compute/server/tags",
                          "c489798d-8031-406d-aabb-0040a3b7b4be")
