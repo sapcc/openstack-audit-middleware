@@ -149,8 +149,8 @@ The resource path is a concatenation of resource names and IDs. URL paths follow
    - `/<resources>`: HTTP POST for create, GET for list
    - `/<resources>/<resource-id>`: HTTP GET for read, PUT for update, DELETE for remove
    - `/<resources>/<resource-id>/action`: POST to perform an action specified by the payload. The payload is expressed as `{<action>: {<parameter1>: <pvalue1>, ...}}`
-   - `/<resources>/<resource-id>/<custom-action>`: perform a custom action specified in the mapping (otherwise this is interpreted as a field, see below)
-   - `/<resources>/<resource-id>/<field>`: update a field of a resource
+   - `/<resources>/<resource-id>/<custom-action>`: perform a custom action specified in the mapping (otherwise this is interpreted as a key, see below)
+   - `/<resources>/<resource-id>/<key>`: update a key of a resource
    - `/<resources>/<resource-id>/<child-resource>`: like top-level resource
    - `/<resources>/<resource-id>/<child-resource>/<child-resource-id>`: like top-level resource
 

@@ -29,8 +29,6 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         self.cfg.config(driver='messaging',
                         transport_url=transport_url,
                         group='audit_middleware_notifications')
-        self.cfg.config(rabbit_max_retries=1,
-                        group='oslo_messaging_rabbit')
 
         with mock.patch('oslo_messaging.notify.notifier.Notifier'
                         '._notify',

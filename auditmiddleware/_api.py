@@ -50,7 +50,7 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_DELETE: '/unset'}
 
 # matcher for UUIDs
-_UUID_RE = re.compile("[0-9a-f\-]+$")
+_UUID_RE = re.compile("[0-9a-f-]+$")
 
 
 def _make_uuid(s):
@@ -85,8 +85,8 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if v is not None and (not isinstance(k, six.string_types) or
-                              not isinstance(v, six.string_types)):
+        if v is not None and (not isinstance(k, six.string_types)
+                              or not isinstance(v, six.string_types)):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
 
@@ -104,9 +104,9 @@ def payloads_map(param):
 
 def _make_tags(ev):
     return [
-        'project_id:{0}'.format(ev.target.project_id or
-                                ev.initiator.project_id or
-                                ev.initiator.domain_id),
+        'project_id:{0}'.format(ev.target.project_id
+                                or ev.initiator.project_id
+                                or ev.initiator.domain_id),
         'target_type_uri:{0}'.format(ev.target.typeURI),
         'action:{0}'.format(ev.action),
         'outcome:{0}'.format(ev.outcome)]
@@ -296,8 +296,8 @@ class OpenStackAuditMiddleware(object):
         to understand what happened. This allows for incremental
         improvement.
         """
-        self._log.warn("unknown resource: %s (created on demand)",
-                       token)
+        self._log.warning("unknown resource: %s (created on demand)",
+                          token)
         res_name = token.replace('_', '-')
         if res_name.startswith('os-'):
             res_name = res_name[3:]
@@ -321,7 +321,7 @@ class OpenStackAuditMiddleware(object):
             res_payload = response.json
 
             # check for bulk-operation
-            if not res_spec.singleton and \
+            if not res_spec.singleton and res_payload and \
                     isinstance(res_payload.get(res_spec.type_name), list):
                 # payloads contain an attribute named like the resource
                 # which contains a list of items
@@ -347,8 +347,9 @@ class OpenStackAuditMiddleware(object):
 
             else:
                 # remove possible wrapper elements
-                res_payload = res_payload.get(res_spec.el_type_name,
-                                              res_payload)
+                if res_payload:
+                    res_payload = res_payload.get(res_spec.el_type_name,
+                                                  res_payload)
 
                 event = self._create_event_from_payload(target_project,
                                                         res_spec,
@@ -361,10 +362,13 @@ class OpenStackAuditMiddleware(object):
                     return []
 
                 # attach payload if requested
-                if self._payloads_enabled and res_spec.payloads['enabled']:
+                if self._payloads_enabled and res_spec.payloads['enabled'] \
+                   and request.content_length > 0 \
+                   and request.content_type == "application/json":
                     req_pl = request.json
                     # remove possible wrapper elements
-                    req_pl = req_pl.get(res_spec.el_type_name, req_pl)
+                    if isinstance(req_pl, dict):
+                        req_pl = req_pl.get(res_spec.el_type_name, req_pl)
                     self._attach_payload(event, req_pl, res_spec)
 
                 events.append(event)
@@ -487,13 +491,13 @@ class OpenStackAuditMiddleware(object):
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
         res_payload = {}
-        if excl:
+        if excl and isinstance(payload, dict):
             res_payload = payload
             # remove possible wrapper elements
             for k in excl:
                 if k in res_payload:
                     del res_payload[k]
-        elif incl:
+        elif incl and isinstance(payload, dict):
             for k in incl:
                 v = payload.get(k)
                 if v:
@@ -508,8 +512,7 @@ class OpenStackAuditMiddleware(object):
 
         event.add_attachment(attach_val)
 
-    @staticmethod
-    def _create_target_resource(target_project, res_spec, res_id,
+    def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
         """ builds a target resource from payload
         """
@@ -519,11 +522,18 @@ class OpenStackAuditMiddleware(object):
 
         # fetch IDs from payload if possible
         if payload:
-            name = payload.get(res_spec.name_field)
-            rid = rid or payload.get(res_spec.id_field)
+            if isinstance(payload, dict):
+                name = payload.get(res_spec.name_field)
+                rid = rid or payload.get(res_spec.id_field)
 
-            project_id = (target_project or payload.get('project_id') or
-                          payload.get('tenant_id'))
+                project_id = (target_project or payload.get('project_id')
+                              or payload.get('tenant_id'))
+            else:
+                project_id = target_project
+                self._log.warning(
+                    "mapping error, malformed resource payload %s (no dict) in bulk operation on resource: %s",
+                    payload,
+                    res_spec)
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)

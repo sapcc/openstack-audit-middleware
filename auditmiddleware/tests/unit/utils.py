@@ -82,7 +82,7 @@ if tuple(sys.version_info)[0:2] < (2, 7):
 class MiddlewareTestCase(BaseTestCase):
 
     def create_middleware(self, cb, **kwargs):
-        raise NotImplemented("implement this in your tests")
+        raise NotImplementedError("implement this in your tests")
 
     def create_simple_middleware(self,
                                  status='200 OK',
@@ -145,9 +145,9 @@ class DisableModuleFixture(fixtures.Fixture):
         self.module = module
         self._finders = []
         self._cleared_modules = {}
+        self.addCleanup(self._tearDown)
 
-    def tearDown(self):
-        super(DisableModuleFixture, self).tearDown()
+    def _tearDown(self):
         for finder in self._finders:
             sys.meta_path.remove(finder)
         sys.modules.update(self._cleared_modules)
@@ -155,8 +155,8 @@ class DisableModuleFixture(fixtures.Fixture):
     def clear_module(self):
         cleared_modules = {}
         for fullname in list(sys.modules.keys()):
-            if (fullname == self.module or
-                    fullname.startswith(self.module + '.')):
+            if (fullname == self.module
+                    or fullname.startswith(self.module + '.')):
                 cleared_modules[fullname] = sys.modules.pop(fullname)
         return cleared_modules
 

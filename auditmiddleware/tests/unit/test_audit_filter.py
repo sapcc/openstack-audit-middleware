@@ -88,7 +88,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
     def test_patch_custom_attr(self):
         rid = str(uuid.uuid4().hex)
-        custom_value = {'child1': 'test', 'child2': 'test-two'}
+        custom_value = {'child1': 'test'}
         # such API does not exist in Nova
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
@@ -462,8 +462,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=payload_content)
         event = self.build_event(request, response, record_payloads=True)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
-                         "/set",
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
+                         + "/set",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -495,8 +495,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url,
                                                 req_json={"unknown": "bla"})
         event = self.build_event(request, response)
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
-                         "/unknown", "compute/server", rid)
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
+                         + "/unknown", "compute/server", rid)
 
     def test_post_resource_undeclared(self):
         rid = str(uuid.uuid4().hex)

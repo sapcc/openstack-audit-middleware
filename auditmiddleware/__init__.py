@@ -19,18 +19,17 @@ in the pipeline so that it can utilise the information the Identity server
 provides.
 """
 
+from auditmiddleware import _api
+from auditmiddleware import _notifier
 import copy
 import datetime
 import functools
-
-import pycadf
-import pytz
-import webob.dec
 from oslo_config import cfg
 from oslo_context import context as oslo_context
 from oslo_log import log as logging
-
-from auditmiddleware import _api, _notifier
+import pycadf
+import pytz
+import webob.dec
 
 _LOG = None
 AUDIT_MIDDLEWARE_GROUP = 'audit_middleware_notifications'
@@ -84,9 +83,10 @@ def _log_and_ignore_error(fn):
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             _LOG.exception('An exception occurred processing '
-                           'the API call: %s ', e)
+                           'the API call with args: {0}{1}'
+                           .format(args, kwargs))
 
     return wrapper
 

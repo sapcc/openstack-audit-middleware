@@ -153,6 +153,7 @@ resources:
                 api_name: os-server-password
                 singleton: true
             tags:
+                singleton: true
             volume-attachments:
                 api_name: os-volume_attachments
                 type_name: volumeAttachments
