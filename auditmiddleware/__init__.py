@@ -24,11 +24,11 @@ from auditmiddleware import _notifier
 import copy
 import datetime
 import functools
-import pycadf
-import pytz
 from oslo_config import cfg
 from oslo_context import context as oslo_context
 from oslo_log import log as logging
+import pycadf
+import pytz
 import webob.dec
 
 _LOG = None
