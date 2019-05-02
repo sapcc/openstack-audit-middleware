@@ -26,5 +26,4 @@ install:
 - pip install tox-travis
 - pip install discover
 - pip install coverage
-- pip install python-subunit
 script: tox
