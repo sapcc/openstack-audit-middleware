@@ -527,10 +527,13 @@ class OpenStackAuditMiddleware(object):
                 rid = rid or payload.get(res_spec.id_field)
 
                 project_id = (target_project or payload.get('project_id')
-                            or payload.get('tenant_id'))
+                              or payload.get('tenant_id'))
             else:
                 project_id = target_project
-                self._log.warning("mapping error, malformed resource payload %s (no dict) in bulk operation on resource: %s", payload, res_spec)
+                self._log.warning(
+                    "mapping error, malformed resource payload %s (no dict) in bulk operation on resource: %s",
+                    payload,
+                    res_spec)
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)

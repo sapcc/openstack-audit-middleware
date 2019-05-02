@@ -19,18 +19,17 @@ in the pipeline so that it can utilise the information the Identity server
 provides.
 """
 
+from auditmiddleware import _api
+from auditmiddleware import _notifier
 import copy
 import datetime
 import functools
-
 import pycadf
 import pytz
-import webob.dec
 from oslo_config import cfg
 from oslo_context import context as oslo_context
 from oslo_log import log as logging
-
-from auditmiddleware import _api, _notifier
+import webob.dec
 
 _LOG = None
 AUDIT_MIDDLEWARE_GROUP = 'audit_middleware_notifications'
