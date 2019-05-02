@@ -17,6 +17,7 @@ matrix:
     env:
     - TOXENV=pep8
   - python: "3.7"
+    dist: xenial
     env:
     - TOXENV=cover
 install:
