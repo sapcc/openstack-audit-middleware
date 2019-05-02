@@ -522,7 +522,7 @@ class OpenStackAuditMiddleware(object):
         name = None
 
         # fetch IDs from payload if possible
-        if payload:
+        if payload and isinstance(payload, dict):
             name = payload.get(res_spec.name_field)
             rid = rid or payload.get(res_spec.id_field)
 

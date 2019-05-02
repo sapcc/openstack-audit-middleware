@@ -3,12 +3,12 @@
 # process, which may cause wedges in the gate later.
 
 # datadog (soft dependency)
-keystoneauth1>=3.1.0 # Apache-2.0
+keystoneauth1>=3.4.0 # Apache-2.0
 oslo.messaging
-oslo.config!=4.3.0,!=4.4.0,>=4.0.0 # Apache-2.0
-oslo.serialization!=2.19.1,>=1.10.0 # Apache-2.0
+oslo.config>=5.2.0 # Apache-2.0
+oslo.serialization!=2.19.1,>=2.18.0 # Apache-2.0
 pycadf!=2.0.0,>=1.1.0 # Apache-2.0
 PyYAML
 requests>=2.14.2 # Apache-2.0
 WebOb>=1.7.1 # MIT
-six
+six>=1.10.0
