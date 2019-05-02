@@ -512,8 +512,7 @@ class OpenStackAuditMiddleware(object):
 
         event.add_attachment(attach_val)
 
-    @staticmethod
-    def _create_target_resource(target_project, res_spec, res_id,
+    def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
         """ builds a target resource from payload
         """
@@ -522,12 +521,16 @@ class OpenStackAuditMiddleware(object):
         name = None
 
         # fetch IDs from payload if possible
-        if payload and isinstance(payload, dict):
-            name = payload.get(res_spec.name_field)
-            rid = rid or payload.get(res_spec.id_field)
+        if payload:
+            if isinstance(payload, dict):
+                name = payload.get(res_spec.name_field)
+                rid = rid or payload.get(res_spec.id_field)
 
-            project_id = (target_project or payload.get('project_id')
-                          or payload.get('tenant_id'))
+                project_id = (target_project or payload.get('project_id')
+                            or payload.get('tenant_id'))
+            else:
+                project_id = target_project
+                self._log.warning("mapping error, malformed resource payload %s (no dict) in bulk operation on resource: %s", payload, res_spec)
 
         type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
