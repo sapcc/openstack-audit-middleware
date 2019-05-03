@@ -73,6 +73,35 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
                          "compute/server/interface", port_id)
 
+    def test_post_create_agent_custom_id(self):
+        agent_id = 180
+        url = self.build_url('os-agents', prefix='/compute/v2.1')
+        req_json = {
+            u'agent': {
+                u'architecture': u'tempest-x86_64-831697749', 
+                u'hypervisor': u'common', 
+                u'md5hash': u'add6bb58e139be103324d04d82d8f545', 
+                u'os': u'linux', 
+                u'url': u'xxx://xxxx/xxx/xxx', 
+                u'version': u'7.0'
+            }
+        }
+        resp_json = {
+            u'agent_id': agent_id, 
+            u'architecture': u'tempest-x86_64-831697749', 
+            u'hypervisor': u'common', 
+            u'md5hash': u'add6bb58e139be103324d04d82d8f545', 
+            u'os': u'linux', 
+            u'url': u'xxx://xxxx/xxx/xxx', 
+            u'version': u'7.0'
+        }
+        request, response = self.build_api_call(
+            'POST', url, req_json=req_json, resp_json=resp_json)
+        event = self.build_event(request, response)
+
+        self.check_event(request, response, event, taxonomy.ACTION_CREATE,
+                         "compute/agent", str(uuid.UUID(int=agent_id)))
+     
     def test_put_global_action(self):
         url = self.build_url('os-services', prefix='/compute/v2.1',
                              suffix="disable")
