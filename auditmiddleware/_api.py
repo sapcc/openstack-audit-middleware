@@ -524,7 +524,8 @@ class OpenStackAuditMiddleware(object):
         if payload:
             if isinstance(payload, dict):
                 name = payload.get(res_spec.name_field)
-                rid = rid or payload.get(res_spec.id_field)
+                # some custom ID fields are no UUIDs/strings but just integers
+                rid = rid or str(payload.get(res_spec.id_field))
 
                 project_id = (target_project or payload.get('project_id')
                               or payload.get('tenant_id'))
