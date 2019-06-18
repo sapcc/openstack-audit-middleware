@@ -47,7 +47,6 @@ resources:
         el_type_uri: network/firewall/policy
       firewall_rules:
         type_uri: network/firewall/rules
-
   lbaas:
     # LBaaS 2.0 namespace
     singleton: true
@@ -65,6 +64,10 @@ resources:
         type_uri: network/loadbalancer/pools
         children:
           members:
+      l7policies:
+        type_uri: network/loadbalancer/l7policies
+        children:
+          rules:
   log:
     # logging extension namespace
     singleton: true
