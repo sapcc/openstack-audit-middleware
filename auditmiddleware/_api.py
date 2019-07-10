@@ -396,7 +396,7 @@ class OpenStackAuditMiddleware(object):
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
                                    subpayload, suffix=None):
-        self._log.debug("create event from payload: %s", subpayload)
+        self._log.debug("create event from payload: %s", self._clean_payload(subpayload, res_spec))
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, suffix)
@@ -511,6 +511,30 @@ class OpenStackAuditMiddleware(object):
                                 name='payload')
 
         event.add_attachment(attach_val)
+
+    @staticmethod
+    def _clean_payload(payload, res_spec):
+        """Clean request payload of sensitive info
+        """
+
+        incl = res_spec.payloads.get('include')
+        excl = res_spec.payloads.get('exclude')
+        res_payload = {}
+        if excl and isinstance(payload, dict):
+            res_payload = payload
+            # remove possible wrapper elements
+            for k in excl:
+                if k in res_payload:
+                    del res_payload[k]
+        elif incl and isinstance(payload, dict):
+            for k in incl:
+                v = payload.get(k)
+                if v:
+                    res_payload[k] = v
+        else:
+            res_payload = payload
+
+        return res_payload
 
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
