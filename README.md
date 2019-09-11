@@ -23,8 +23,8 @@ For operators the difference is minor though. The integration of the new middlew
 
 The figure above shows the middleware in Nova's pipeline.
 
-Enabling audit middleware
-=========================
+Embedding
+=========
 To enable auditing, _oslo.messaging_ should be installed. If not, the middleware
 will write audit events to the application log instead.
 
@@ -45,8 +45,8 @@ Below is an example using Nova's WSGI pipeline::
     keystone = faultwrap sizelimit authtoken keystonecontext ratelimit audit osapi_compute_app_v2
     keystone_nolimit = faultwrap sizelimit authtoken keystonecontext audit osapi_compute_app_v2
 
-Configure audit middleware
-==========================
+Configuration
+=============
 
 API Mapping
 ---------------
@@ -133,7 +133,7 @@ The following metrics and dimensions are supported
 | openstack_audit_messaging_errors | Failed attempts to push to message queue, leading to events dumped into log files | |
 
 Mapping Rules
-==================================
+=============
 
 The creation of audit events is driven by so called _mapping rules_. The CADF mapping rules are essentially a model of resources. Using OpenStack API design patterns, this model implies how the HTTP API requests are formed.
 
@@ -267,3 +267,44 @@ Undeclared Resources
 Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics. They can be recognized by the `X` suffix in the resource name.
 
 When those X-resources show up, the mapping file should be extended with an appropriate resource definition. The reason is that the heuristics to discover and map undeclared resources are not covering all kinds of requests. There are ambiguities. 
+
+Developing Audit Middleware
+===========================
+
+Contributing
+------------
+
+This project is open for external contributions. The issue list shows what is planned for upcoming releases.
+
+Pull-requests are welcome as long as you follow a few rules:
+
+* Ensure that the middleware cannot degrade availabilty (no crashes, no deadlocks, no synchronous remote calls)
+* Do not degrade performance
+* Include unit tests for new or modified code
+* Pass the static code checks
+* Keep the architecture intact, don't add shortcuts, layers, ...
+
+## Software Design
+
+The purpose of this middleware is to create audit records from API calls. 
+
+Each record describes a user or system activity following the 5W1H principle:
+* who: which user?
+* what: which action? which parameters?
+* where: on which target resource?
+* when: what timestamp?
+* why: which service URL?
+* how: with what outcome (outcome, HTTP response code)
+
+This information is gathered from the URL path and the exchanged payloads which may contain important information like resource IDs or names. Discovering that information based on the hints in the mapping file is what most of the code is about.
+
+Complexity comes from:
+* different styles of encoding actions and payloads
+* _create_ calls, where the target resource ID needs to be fetched from the result payload
+* mass vs. single operations
+
+Components/Packages
+
+* api: Implementation of actual pipeline filter
+* notifier: Implementation of the asynchronous event push to the oslo bus
+* tests: unit and component tests
