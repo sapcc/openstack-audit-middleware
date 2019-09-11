@@ -492,7 +492,8 @@ class OpenStackAuditMiddleware(object):
         excl = res_spec.payloads.get('exclude')
         res_payload = {}
         if excl and isinstance(payload, dict):
-            res_payload = payload
+            # make a copy so we do not change the original request
+            res_payload = payload.copy()
             # remove possible wrapper elements
             for k in excl:
                 if k in res_payload:
