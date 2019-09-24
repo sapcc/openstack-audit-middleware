@@ -212,7 +212,7 @@ Some resources exist only once, i.e. they only have a single _instance_ and thus
 For some resources, some API designs do not follow the common OpenStack naming patterns. Those exceptions can be modelled with the following settings:
  * `api_name`: resource name in the URL path (default: `<resource-name>`); must be unique
  * `type_uri`: type-URI of the resource, used in the target.typeURI attribute of the produced CADF event (default: `<parent-typeURI>/<resource-name>`)
- * `el_type_uri`: type-URI of the resource instances if the resource is not a singleton (default: `type_uri` omitting the last character)
+ * `el_type_uri`: type-URI of the resource instances (default: `type_uri` omitting the last character); not applicable to singletons
  * `custom_id`: indicate which resource attribute contains the unique resource ID (default: `id`)
  * `custom_name`: indicate which resource attribute contains the resource readable name (default: `name`)
  * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name, but with `-` replaced by `_`)

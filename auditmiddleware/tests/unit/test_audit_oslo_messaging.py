@@ -83,12 +83,12 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         # and not the one specified in oslo_messaging_notifications section
         path = '/v2/' + self.project_id + '/servers'
         invocations = 3
-        for i in range(0, invocations):
+        for _ in range(0, invocations):
             app.get(path, extra_environ=self.get_environ_header())
         # check that the backlog has grown
         self.assert_statsd_gauge('backlog', 1)
         time.sleep(1)
-        for i in range(0, invocations):
+        for _ in range(0, invocations):
             delay()
         self.assertTrue(driver.called)
         # check that the backlog has been reset

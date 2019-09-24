@@ -81,6 +81,7 @@ class OpenStackResource(resource.Resource):
 
 
 def str_map(param):
+    """Ensures that a dictionary contains only string values."""
     if not param:
         return {}
 
@@ -93,16 +94,19 @@ def str_map(param):
     return param
 
 
-def payloads_map(param):
+def payloads_config(param):
+    """Creates a valid payloads config from the config."""
     if not param:
         return {'enabled': True}
 
-    param['enabled'] = bool(param.get('enabled', True))
+    payloads_config = param.copy()
+    payloads_config['enabled'] = bool(param.get('enabled', True))
 
-    return param
+    return payloads_config
 
 
 def _make_tags(ev):
+    """Build statsd metric tags from CADF event."""
     return [
         'project_id:{0}'.format(ev.target.project_id
                                 or ev.initiator.project_id
@@ -142,6 +146,7 @@ class OpenStackAuditMiddleware(object):
             if metrics_enabled else None
 
     def _create_statsd_client(self):
+        """Creates the statsd client (if datadog package is present)"""
         try:
             import datadog
 
@@ -156,6 +161,12 @@ class OpenStackAuditMiddleware(object):
                               "openstack_audit_* metrics will be produced.")
 
     def _build_audit_map(self, res_dict, parent_type_uri=None):
+        """Creates the mapping from REST resource names to the resource
+        descriptor.
+
+        The descriptor contains all the information needed to produce
+        the CADF events from HTTP requests."""
+
         result = {}
 
         for name, s in six.iteritems(res_dict):
@@ -167,18 +178,26 @@ class OpenStackAuditMiddleware(object):
 
         return result
 
-    def _build_res_spec(self, name, parent_type_uri, spec):
+    def _build_res_spec(self, name, parent_type_uri, spec=None):
+        """Creates a resource descriptor from a mapping entry.
+
+        Parameters:
+            name: CADF name of the resource type
+            parent_type_uri: type URI of the parent CADF resource type (acting as prefix)
+            spec: mapping entry from the config to be parsed"""
+
         if not spec:
             spec = {}
-        else:
-            spec = spec
         if parent_type_uri:
             pfx = parent_type_uri
         else:
             pfx = self._service_type
+        # REST path segment normally equals resource name
         rest_name = spec.get('api_name', name)
         singleton = spec.get('singleton', False)
         type_name = spec.get('type_name')
+        # derive the type name used for resource representations in JSON from
+        # the REST name
         if not type_name:
             type_name = rest_name.replace('-', '_')
             if type_name.startswith('os_'):
@@ -188,6 +207,8 @@ class OpenStackAuditMiddleware(object):
         el_type_uri = None
         childs_parent_type_uri = None
         if not singleton:
+            # derive the name of the individual resource instances (elements)
+            # by omitting the last character of the resource name
             el_type_name = spec.get('el_type_name', type_name[:-1])
             el_type_uri = type_uri[:-1]
             childs_parent_type_uri = el_type_uri
@@ -202,7 +223,7 @@ class OpenStackAuditMiddleware(object):
                                 self._build_audit_map(
                                     spec.get('children', {}),
                                     childs_parent_type_uri),
-                                payloads_map(spec.get('payloads')))
+                                payloads_config(spec.get('payloads')))
         return res_spec, rest_name
 
     def create_events(self, request, response=None):
@@ -221,8 +242,21 @@ class OpenStackAuditMiddleware(object):
 
     def _build_events(self, target_project, res_spec, res_id, res_parent_id,
                       request, response, path, cursor=0):
-        """ Parse a resource request recursively and build CADF events from it
-        """
+        """Parse a resource request recursively and builds CADF events from it.
+
+        This methods parses the URL path from left to right and builds the resource
+        hierarchy from it. The res_spec resource tree is used to interpret the path
+        segments properly, e.g. known when a path segment represents a resource name,
+        an ID or an attribute name.
+        Parameters:
+            target_project: target project ID if specified in the path
+            res_spec: resource tree constructed from the mapping file
+            res_id: ID of the target resource
+            parent_res_id: ID of the parent resource of the target resource
+            request: incoming request to parse
+            response: resulting response to parse (e.g. to obtain results, just created resource IDs)
+            path: URL path being parsed
+            cursor: current position in the path as it is parsed"""
 
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
@@ -233,19 +267,22 @@ class OpenStackAuditMiddleware(object):
 
         # Find next path segment (skip leading / with +1)
         next_pos = path.find('/', cursor + 1)
+        # token = scanned token (NOT keystone token)
         token = None
         if next_pos != -1:
             # that means there are more path segments
             token = path[cursor + 1:next_pos]
         elif (cursor + 1) < len(path):
+            # last path segment found, not more '/' right of it
             token = path[cursor + 1:]
 
         # handle the current token
         if isinstance(res_spec, dict):
-            # the node contains a dict => handle token as resource name
+            # the resource tree node contains a dict => the token contains the
+            # top-level resource name
             sub_res_spec = res_spec.get(token)
             if sub_res_spec is None:
-                # create resource spec on demand
+                # create resource spec on demand using defaults
                 sub_res_spec = self.register_resource(None, token)
                 res_spec[token] = sub_res_spec
 
@@ -254,12 +291,13 @@ class OpenStackAuditMiddleware(object):
                                       response,
                                       path, next_pos)
         elif isinstance(res_spec, ResourceSpec):
-            # if the ID is set or it is a singleton
-            # next up is an action or child
+            # if the ID is set or it is a singleton, then the next token will
+            # be an action or child
             if res_id or res_spec.singleton or token in res_spec.children:
                 child_res = res_spec.children.get(token)
                 if child_res:
-                    # the ID is still the one of the parent
+                    # the ID is still the one of the parent (or its parent if
+                    # the direct parent is a singleton)
                     return self._build_events(target_project, child_res, None,
                                               res_id or res_parent_id, request,
                                               response, path, next_pos)
@@ -270,17 +308,18 @@ class OpenStackAuditMiddleware(object):
                                           path, next_pos)
 
             if next_pos == -1:
-                # this must be an action or a key
+                # last path segment --> token must be an action or a key
                 return self._create_events(target_project, res_id,
                                            res_parent_id, res_spec, request,
                                            response, token)
             else:
-                # create resource spec on demand
+                # unknown resource name
+                # create resource spec on demand ...
                 res_spec.children[token] = self.register_resource(
                     res_spec.el_type_uri,
                     token)
 
-                # repeat same call with res_spec now existing
+                # ... then repeat same call with res_spec now existing
                 return self._build_events(target_project, res_spec, res_id,
                                           res_parent_id, request, response,
                                           path, cursor)
@@ -291,11 +330,12 @@ class OpenStackAuditMiddleware(object):
         return None
 
     def register_resource(self, parent_type_uri, token):
-        """ Register an unknown resource to avoid missed events.
-        The resulting events are a bit raw but contain enough information
-        to understand what happened. This allows for incremental
-        improvement.
-        """
+        """Register an unknown resource to avoid missed events.
+
+        The resulting events are a bit raw but contain enough
+        information to understand what happened. This allows for
+        incremental improvement."""
+
         self._log.warning("unknown resource: %s (created on demand)",
                           token)
         res_name = token.replace('_', '-')
@@ -314,7 +354,7 @@ class OpenStackAuditMiddleware(object):
                        res_spec, request, response, suffix=None):
         events = []
 
-        # check for update operations
+        # check for update operations (POST, PUT, PATCH)
         if request.method[0] == 'P' and response \
                 and response.content_length > 0 \
                 and response.content_type == "application/json":
@@ -396,7 +436,8 @@ class OpenStackAuditMiddleware(object):
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
                                    subpayload, suffix=None):
-        self._log.debug("create event from payload: %s", self._clean_payload(subpayload, res_spec))
+        self._log.debug("create event from payload: %s",
+                        self._clean_payload(subpayload, res_spec))
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, suffix)
@@ -485,8 +526,7 @@ class OpenStackAuditMiddleware(object):
 
     @staticmethod
     def _attach_payload(event, payload, res_spec):
-        """Attach request payload to event
-        """
+        """Attach request payload to event"""
 
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
@@ -515,8 +555,7 @@ class OpenStackAuditMiddleware(object):
 
     @staticmethod
     def _clean_payload(payload, res_spec):
-        """Clean request payload of sensitive info
-        """
+        """Clean request payload of sensitive info"""
 
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
@@ -539,12 +578,10 @@ class OpenStackAuditMiddleware(object):
 
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
-        """ builds a target resource from payload
-        """
+        """builds a target resource from payload."""
         project_id = target_project
         rid = res_id
         name = None
-
         # fetch IDs from payload if possible
         if payload:
             if isinstance(payload, dict):
@@ -583,9 +620,8 @@ class OpenStackAuditMiddleware(object):
         return observer
 
     def _get_action_and_key(self, res_spec, res_id, request, suffix):
-        """Determine the CADF action and key from
-        the request method, path and payload
-        """
+        """Determine the CADF action and key from the request method, path and
+        payload."""
 
         if suffix is None:
             return self._get_action_from_method(request.method, res_spec,
@@ -595,17 +631,16 @@ class OpenStackAuditMiddleware(object):
             action = self._get_action_from_payload(request, res_spec, res_id)
             return action, None
 
-        return self._get_action_and_key_from_path_suffix(
-            suffix, request.method, res_spec, res_id)
+        return self._get_action_and_key_from_path_suffix(suffix, request.method, res_spec, res_id)
 
     @staticmethod
     def _get_action_from_method(method, res_spec, res_id):
-        """Determine the CADF action from the HTTP method
-        """
+        """Determine the CADF action from the HTTP method."""
 
         if method == 'POST':
             if res_id or res_spec.singleton:
                 return taxonomy.ACTION_UPDATE
+
             return taxonomy.ACTION_CREATE
         elif method == 'GET' or method == 'HEAD':
             if res_id or res_spec.singleton:
@@ -618,8 +653,7 @@ class OpenStackAuditMiddleware(object):
 
     def _get_action_and_key_from_path_suffix(self, path_suffix, method,
                                              res_spec, res_id):
-        """Determine the CADF action from the URL path
-        """
+        """Determine the CADF action from the URL path."""
 
         rest_action = path_suffix
         # check for individual mapping of action
@@ -643,8 +677,7 @@ class OpenStackAuditMiddleware(object):
         return action, path_suffix
 
     def _get_action_from_payload(self, request, res_spec, res_id):
-        """Read the action name from the payload (OpenStack pattern)
-        """
+        """Read the action name from the payload (OpenStack pattern)"""
 
         try:
             payload = request.json
@@ -663,26 +696,24 @@ class OpenStackAuditMiddleware(object):
                                   request.path)
                 return None
         except ValueError:
-            self._log.warning(
-                "unexpected empty action payload for path: %s",
-                request.path)
+            self._log.warning("unexpected empty action payload for path: %s",
+                              request.path)
             return None
 
     @staticmethod
     def _build_service_id(name):
-        """Invent stable UUID for the service itself
-        """
+        """Invent stable UUID for the service itself."""
 
         md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
         ns = uuid.UUID(md5_hash.hexdigest())
         return str(uuid.uuid5(ns, socket.getfqdn()))
 
     def _strip_url_prefix(self, request):
-        """ Removes the prefix from the URL paths
+        """Removes the prefix from the URL paths.
+
         :param request: incoming request
         :return: URL request path without the leading prefix or None if prefix
-        was missing and optional target tenant or None
-        """
+        was missing and optional target tenant or None"""
 
         g = self._prefix_re.match(request.path)
         if g:
