@@ -543,7 +543,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/servers", None,
                          self.service_name)
 
-        # TODO: fix and enable for Swift
+        # this test needs to be passed for Swift. Currently audit-middleware does not support
+        # the REST patterns implemented by Swift
         # def test_no_auth_token(self):
         #     # Test cases where API requests such as Swift list public
         # containers
