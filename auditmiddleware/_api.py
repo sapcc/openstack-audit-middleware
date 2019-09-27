@@ -531,8 +531,8 @@ class OpenStackAuditMiddleware(object):
         return event
 
     @staticmethod
-    def _attach_payload(event, payload, res_spec):
-        """Attach request payload to event"""
+    def _clean_payload(payload, res_spec):
+        """Clean request payload of sensitive info"""
 
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
@@ -552,35 +552,20 @@ class OpenStackAuditMiddleware(object):
         else:
             res_payload = payload
 
+        return res_payload
+
+    @staticmethod
+    def _attach_payload(event, payload, res_spec):
+        """Attach request payload to event"""
+
+        res_payload = OpenStackAuditMiddleware._clean_payload(payload, res_spec)
+
         attach_val = Attachment(typeURI="mime:application/json",
                                 content=json.dumps(res_payload,
                                                    separators=(',', ':')),
                                 name='payload')
 
         event.add_attachment(attach_val)
-
-    @staticmethod
-    def _clean_payload(payload, res_spec):
-        """Clean request payload of sensitive info"""
-
-        incl = res_spec.payloads.get('include')
-        excl = res_spec.payloads.get('exclude')
-        res_payload = {}
-        if excl and isinstance(payload, dict):
-            res_payload = payload
-            # remove possible wrapper elements
-            for k in excl:
-                if k in res_payload:
-                    del res_payload[k]
-        elif incl and isinstance(payload, dict):
-            for k in incl:
-                v = payload.get(k)
-                if v:
-                    res_payload[k] = v
-        else:
-            res_payload = payload
-
-        return res_payload
 
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
