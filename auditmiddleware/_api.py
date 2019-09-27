@@ -96,6 +96,7 @@ def str_map(param):
 
 def payloads_config(param):
     """Creates a valid payloads config from the config."""
+
     if not param:
         return {'enabled': True}
 
@@ -107,6 +108,7 @@ def payloads_config(param):
 
 def _make_tags(ev):
     """Build statsd metric tags from CADF event."""
+
     return [
         'project_id:{0}'.format(ev.target.project_id
                                 or ev.initiator.project_id
@@ -189,6 +191,7 @@ class OpenStackAuditMiddleware(object):
 
         if not spec:
             spec = {}
+
         if parent_type_uri:
             pfx = parent_type_uri
         else:
@@ -249,6 +252,7 @@ class OpenStackAuditMiddleware(object):
         hierarchy from it. The res_spec resource tree is used to interpret the path
         segments properly, e.g. known when a path segment represents a resource name,
         an ID or an attribute name.
+
         Parameters:
             target_project: target project ID if specified in the path
             res_spec: resource tree constructed from the mapping file
