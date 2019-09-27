@@ -183,7 +183,8 @@ class OpenStackAuditMiddleware(object):
 
         Parameters:
             name: CADF name of the resource type
-            parent_type_uri: type URI of the parent CADF resource type (acting as prefix)
+            parent_type_uri: type URI of the parent CADF resource type
+                             (acting as prefix)
             spec: mapping entry from the config to be parsed"""
 
         if not spec:
@@ -254,7 +255,8 @@ class OpenStackAuditMiddleware(object):
             res_id: ID of the target resource
             parent_res_id: ID of the parent resource of the target resource
             request: incoming request to parse
-            response: resulting response to parse (e.g. to obtain results, just created resource IDs)
+            response: resulting response to parse (e.g. to obtain results,
+                      just created resource IDs)
             path: URL path being parsed
             cursor: current position in the path as it is parsed"""
 
@@ -594,7 +596,8 @@ class OpenStackAuditMiddleware(object):
             else:
                 project_id = target_project
                 self._log.warning(
-                    "mapping error, malformed resource payload %s (no dict) in bulk operation on resource: %s",
+                    "mapping error, malformed resource payload %s (no dict) "
+                    "in bulk operation on resource: %s",
                     payload,
                     res_spec)
 
@@ -631,7 +634,8 @@ class OpenStackAuditMiddleware(object):
             action = self._get_action_from_payload(request, res_spec, res_id)
             return action, None
 
-        return self._get_action_and_key_from_path_suffix(suffix, request.method, res_spec, res_id)
+        return self._get_action_and_key_from_path_suffix(suffix, request.method,
+                    res_spec, res_id)
 
     @staticmethod
     def _get_action_from_method(method, res_spec, res_id):
@@ -713,7 +717,8 @@ class OpenStackAuditMiddleware(object):
 
         :param request: incoming request
         :return: URL request path without the leading prefix or None if prefix
-        was missing and optional target tenant or None"""
+        was missing and optional target tenant or None
+        """
 
         g = self._prefix_re.match(request.path)
         if g:
