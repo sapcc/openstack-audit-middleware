@@ -558,7 +558,8 @@ class OpenStackAuditMiddleware(object):
     def _attach_payload(event, payload, res_spec):
         """Attach request payload to event"""
 
-        res_payload = OpenStackAuditMiddleware._clean_payload(payload, res_spec)
+        res_payload = OpenStackAuditMiddleware._clean_payload(
+            payload, res_spec)
 
         attach_val = Attachment(typeURI="mime:application/json",
                                 content=json.dumps(res_payload,
@@ -623,8 +624,8 @@ class OpenStackAuditMiddleware(object):
             action = self._get_action_from_payload(request, res_spec, res_id)
             return action, None
 
-        return self._get_action_and_key_from_path_suffix(suffix, request.method,
-                    res_spec, res_id)
+        return self._get_action_and_key_from_path_suffix(
+            suffix, request.method, res_spec, res_id)
 
     @staticmethod
     def _get_action_from_method(method, res_spec, res_id):
