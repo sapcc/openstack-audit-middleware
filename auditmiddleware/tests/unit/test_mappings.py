@@ -227,8 +227,8 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "network/floatingip", rid)
 
     def test_post_create_ports(self):
-        """ regression test introduced to explain the issue with determining
-        the target project of service calls to neutron api.
+        """regression test introduced to explain the issue with determining the
+        target project of service calls to neutron api.
 
         The problem here was that instead of project_id, our Neutron
         version returned tenant_id ONLY.
@@ -323,8 +323,7 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                       "attachment should contain security_groups value")
 
     def test_post_create_namespaced(self):
-        """ tests the use of singleton resources for namespace prefixes
-        """
+        """tests the use of singleton resources for namespace prefixes."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('fwaas', prefix='/v2.0',
                              child_res="firewall_groups")
@@ -336,9 +335,8 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "network/firewall", target_id=rid)
 
     def test_post_create_merged_namespaced(self):
-        """ check whether to namespace-like resources can be mapped to the
-        same type URI
-        """
+        """check whether to namespace-like resources can be mapped to the same
+        type URI."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('fw', prefix='/v2.0',
                              child_res="firewalls")
@@ -391,8 +389,10 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
                              items[idx]['id'], items[idx]['name'])
 
     def test_put_custom_action(self):
-        """ "/v2.0/routers/0e7a2b1b-1b1a-428b-97b5-afd1a41c8f74
-        /remove_router_interface" """
+        """"/v2.0/routers/0e7a2b1b-1b1a-428b-97b5-afd1a41c8f74.
+
+        /remove_router_interface"
+        """
 
 
 class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):

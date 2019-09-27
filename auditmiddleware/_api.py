@@ -167,7 +167,8 @@ class OpenStackAuditMiddleware(object):
         descriptor.
 
         The descriptor contains all the information needed to produce
-        the CADF events from HTTP requests."""
+        the CADF events from HTTP requests.
+        """
 
         result = {}
 
@@ -187,7 +188,8 @@ class OpenStackAuditMiddleware(object):
             name: CADF name of the resource type
             parent_type_uri: type URI of the parent CADF resource type
                              (acting as prefix)
-            spec: mapping entry from the config to be parsed"""
+            spec: mapping entry from the config to be parsed
+        """
 
         if not spec:
             spec = {}
@@ -262,7 +264,8 @@ class OpenStackAuditMiddleware(object):
             response: resulting response to parse (e.g. to obtain results,
                       just created resource IDs)
             path: URL path being parsed
-            cursor: current position in the path as it is parsed"""
+            cursor: current position in the path as it is parsed
+        """
 
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
@@ -340,7 +343,8 @@ class OpenStackAuditMiddleware(object):
 
         The resulting events are a bit raw but contain enough
         information to understand what happened. This allows for
-        incremental improvement."""
+        incremental improvement.
+        """
 
         self._log.warning("unknown resource: %s (created on demand)",
                           token)
@@ -532,7 +536,7 @@ class OpenStackAuditMiddleware(object):
 
     @staticmethod
     def _clean_payload(payload, res_spec):
-        """Clean request payload of sensitive info"""
+        """Clean request payload of sensitive info."""
 
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
@@ -556,7 +560,7 @@ class OpenStackAuditMiddleware(object):
 
     @staticmethod
     def _attach_payload(event, payload, res_spec):
-        """Attach request payload to event"""
+        """Attach request payload to event."""
 
         res_payload = OpenStackAuditMiddleware._clean_payload(
             payload, res_spec)

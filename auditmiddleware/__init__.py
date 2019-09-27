@@ -11,12 +11,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""
-Build open standard audit information based on incoming requests.
+"""Build open standard audit information based on incoming requests.
 
-AuditMiddleware filter should be placed after keystonemiddleware.auth_token
-in the pipeline so that it can utilise the information the Identity server
-provides.
+AuditMiddleware filter should be placed after
+keystonemiddleware.auth_token in the pipeline so that it can utilise the
+information the Identity server provides.
 """
 
 from auditmiddleware import _api
