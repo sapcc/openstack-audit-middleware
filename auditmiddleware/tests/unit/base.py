@@ -73,6 +73,8 @@ user_counter = 0
 
 class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
     def setUp(self):
+        """Set up common parts of all test-cases here."""
+
         super(BaseAuditMiddlewareTest, self).setUp()
 
         global user_counter
@@ -99,12 +101,30 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.addCleanup(patcher.stop)
 
     def assert_statsd_counter(self, metric, value, tags=None):
+        """Assert that a statsd counter metric has a certain value.
+
+        Parameters:
+            metric: name of the metric
+            value: expected value of said metric
+            tags: tags associated with the metric (dimensions)
+        """
+
         self.statsd_report_mock.assert_any_call(metric, 'c', value, tags, 1)
 
     def assert_statsd_gauge(self, metric, value, tags=None):
+        """Assert that a statsd gauge metric has a certain value.
+
+        Parameters:
+            metric: name of the metric
+            value: expected value of said metric
+            tags: tags associated with the metric (dimensions)
+        """
+
         self.statsd_report_mock.assert_any_call(metric, 'g', value, tags, 1)
 
     def create_middleware(self, cb, **kwargs):
+        """Implement abstract method from base class."""
+
         @webob.dec.wsgify
         def _do_cb(req):
             return cb(req)
@@ -115,9 +135,13 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
     @property
     def audit_map(self):
+        """Path to the audit mapping file used for this test-case."""
+
         return self.audit_map_file_fixture.path
 
     def get_environ_header(self, req_type=None):
+        """Provide the headers usually the keystonemiddleware would provide."""
+
         env_headers = {'HTTP_X_USER_ID': self.user_id,
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
@@ -129,6 +153,17 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
     def build_event(self, req, resp=None, middleware_cfg=None,
                     record_payloads=False, metrics_enabled=True):
+        """Trigger the actual creation of an event from request/response
+        fixture.
+
+        Parameters:
+            req: webob request
+            resp: webeb response (unless we have a negative test)
+            middleware_cfg (optional): override standard path to the mapping file
+            record_payloads: option to add request payloads to the CADF event
+            metrics_enabled: enable/disable creation of metrics
+        """
+
         event_list = self.build_event_list(req, resp, middleware_cfg,
                                            record_payloads, metrics_enabled)
         if event_list:
@@ -200,17 +235,13 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
         return req, resp
 
-    def get_payload(self, method, url,
-                    audit_map=None, body=None, environ=None):
-        req, _ = self.build_api_call(method, url, body, environ)
-
-        return self.build_event(req, audit_map)[0]
-
     def check_event(self, request, response, event, action,
                     target_type_uri,
                     target_id=None,
                     target_name=None,
                     outcome="success"):
+        """Assert that the service-independent information in the produced CADF
+        events is complete and valid."""
 
         self.assertIsNotNone(event, "missing event")
         self.assertEqual(event['action'], action)
