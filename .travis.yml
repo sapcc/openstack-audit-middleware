@@ -26,7 +26,8 @@ install:
 - pip install tox-travis
 - pip install discover
 - pip install coverage
+- pip install coveralls
 script:
 - tox
 after_success:
-- coveralls
+- coveralls --service travis-ci
