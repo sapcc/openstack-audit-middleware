@@ -11,6 +11,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""Test proper integration into the paste pipeline of OpenStack services."""
 import fixtures
 import mock
 import webob
@@ -19,7 +20,15 @@ from auditmiddleware.tests.unit import base
 
 
 class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
+    """Test suite for the middleware contract."""
+
     def setUp(self):
+        """Test preparation.
+
+        Test setup is concerned with replacing
+        outgoing dependencies with mocks. In this case
+        only the notifier needs to be substituted.
+        """
         self.notifier = mock.MagicMock()
 
         p = 'auditmiddleware._notifier.create_notifier'
@@ -29,6 +38,11 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         super(AuditMiddlewareTest, self).setUp()
 
     def test_api_request(self):
+        """Test that an API request causes a notification (= event).
+
+        Validate the proper mapping of generic HTTP request attributes
+        to the resulting event.
+        """
         path = '/v2/' + self.project_id + "/servers"
         self.create_simple_app().get(path,
                                      extra_environ=self.get_environ_header())
@@ -41,16 +55,23 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         # self.assertIn('reporterchain', call_args[1])
 
     def test_api_request_failure(self):
+        """Test that application exceptions are handled properly.
 
+        We need to ensure that runtime errors further down the pipeline
+        are properly reflected in events and do not break our middleware
+        or worste the entire pipeline and thus service.
+        """
         class CustomException(Exception):
             pass
 
         path = '/v2/' + self.project_id + "/servers"
 
+        # this is a flawed app that always fails with an exception
         def cb(req):
             raise CustomException('It happens!')
 
         try:
+            # created a webserver for the above flawed app with the middleware
             self.create_app(cb).get(path,
                                     extra_environ=self.get_environ_header())
 
@@ -64,7 +85,8 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         self.assertEqual('unknown', call_args[1]['outcome'])
         # self.assertIn('reporterchain', call_args[1])
 
-    def test_process_request_fail(self):
+    def test_process_blank_request(self):
+        """Test proper handling of empty requests."""
         path = '/v2/' + self.project_id + "/servers"
 
         req = webob.Request.blank(path,
@@ -76,6 +98,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         self.assertTrue(self.notifier.notify.called)
 
     def test_ignore_req_opt(self):
+        """Test that requests can be ignored by HTTP request method."""
         path = '/v2/' + self.project_id + "/servers"
 
         app = self.create_simple_app(ignore_req_list='get, PUT')
@@ -95,6 +118,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(path, call_args[1]['requestPath'])
 
     def test_cadf_event_context_scoped(self):
+        """Test that a proper req. context is passed to the notifier."""
         path = '/v2/' + self.project_id + "/servers"
 
         self.create_simple_app().get(path,
@@ -108,6 +132,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         self.assertIsInstance(call_args[0], dict)
 
     def test_cadf_event_scoped_to_request_on_error(self):
+        """Test that events are not accidentally repeated."""
         path = '/v2/' + self.project_id + "/servers"
 
         middleware = self.create_simple_middleware()
@@ -133,6 +158,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
                             self.notifier.notify.call_args_list[0][0][1]['id'])
 
     def test_no_response(self):
+        """Ensure event is created even for missing response."""
         middleware = self.create_simple_middleware()
         url = 'http://admin_host:8774/v2/' + self.project_id + '/servers'
         req = webob.Request.blank(url,

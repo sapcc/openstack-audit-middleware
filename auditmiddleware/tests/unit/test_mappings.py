@@ -1,15 +1,37 @@
-import json
-import os
-import uuid
-from builtins import str
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
 
-from pycadf import cadftaxonomy as taxonomy
+"""Smoke tests for our mapping files.
+
+These tests cover all the ugly corner-cases that arose when
+elaborating the mappings from the API documentation.
+"""
 
 from auditmiddleware.tests.unit import base
+from builtins import str
+import json
+import os
+from pycadf import cadftaxonomy as taxonomy
+import uuid
 
 
 class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
+    """Test the nova mappping file."""
+
     def setUp(self):
+        """Set up the test.
+
+        Load the mapping file and set the service name and key.
+        """
         super(NovaAuditMappingTest, self).setUp()
 
         self.audit_map_file_fixture = "etc/nova_audit_map.yaml"
@@ -22,9 +44,11 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
 
     @property
     def audit_map(self):
+        """audit_map attribute."""
         return self.audit_map_file_fixture
 
     def test_get_list(self):
+        """Test listing a resource (GET w/o object ID)."""
         url = self.build_url('servers', prefix='/compute/v2.1')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
@@ -34,6 +58,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          None, self.service_name)
 
     def test_get_list_os_migrations(self):
+        """Test resource names in the URL path can be renamed.""" 
         url = self.build_url('os-migrations', prefix='/compute/v2.1')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
@@ -42,9 +67,15 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
                          "compute/migrations",
                          None, self.service_name)
 
-    # ensure that the os-prefix is omitted when deriving JSON type name from
-    # the api_name
     def test_get_read(self):
+        """Test that the os-prefix in the path is omitted.
+        
+        When deriving the name of the attribute containing
+        the resource contents (JSON type name) from the
+        path segment representing the resource (API name),
+        any 'os-' prefix needs to be omitted.
+        """
+    # the api_name
         rid = str(uuid.uuid4().hex)
         url = self.build_url('os-hypervisors', prefix='/compute/v2.1',
                              res_id=rid)
@@ -151,7 +182,11 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
 
 class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
-        super(NeutronAuditMappingTest, self).setUp()
+        """Set up the test.
+
+        Load the mapping file and set the service name and key.
+        """
+       super(NeutronAuditMappingTest, self).setUp()
 
         self.audit_map_file_fixture = "etc/neutron_audit_map.yaml"
 
@@ -397,7 +432,11 @@ class NeutronAuditMappingTest(base.BaseAuditMiddlewareTest):
 
 class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
-        super(CinderAuditMappingTest, self).setUp()
+         """Set up the test.
+
+        Load the mapping file and set the service name and key.
+        """
+       super(CinderAuditMappingTest, self).setUp()
 
         self.audit_map_file_fixture = "etc/cinder_audit_map.yaml"
 
@@ -471,7 +510,11 @@ class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
 
 class DesignateAuditMappingTest(base.BaseAuditMiddlewareTest):
     def setUp(self):
-        super(DesignateAuditMappingTest, self).setUp()
+        """Set up the test.
+
+        Load the mapping file and set the service name and key.
+        """
+       super(DesignateAuditMappingTest, self).setUp()
 
         self.audit_map_file_fixture = "etc/designate_audit_map.yaml"
 

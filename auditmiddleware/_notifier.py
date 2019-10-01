@@ -10,6 +10,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""Provides a oslo-messaging and a log-based messaging connector."""
+
 import os
 from six.moves import queue
 import sys
@@ -22,6 +24,12 @@ except ImportError:
 
 
 class _LogNotifier(object):
+    """A notifier that dumps the event content into the log.
+
+    The log entries have severity INFO, so logging needs to be configured
+    to that level to see the contents.
+    """
+
     def __init__(self, log):
         self._log = log
 
@@ -33,7 +41,36 @@ class _LogNotifier(object):
 
 
 class _MessagingNotifier(Thread):
+    """A notifier that publishes the events to the oslo bus.
+
+    This is the default implementation. It will use any messaging
+    provider configured in *oslo messaging*. Instead of pushing
+    incoming events to the message bus synchronously, the events
+    will be appended to a bounded queue. An asynchronous worker
+    will fetch the events from there and deliver them to the
+    oslo bus.
+
+    When the queue's capacity is exhausted, all undelivered
+    events will be flushed to the logs. This way we ensure that
+    problems with the messaging system do not degrade availability
+    of the service.
+
+    This has implications though: Buffered events will be lost if the
+    process is killed hardly. As can be observed through the
+    openstack_audit_messaging_backlog metric, the number of buffered
+    events usually hovers between 0 and 1 since event delivery is
+    much faster than request processing.
+    """
+
     def __init__(self, notifier, log, mem_queue_size, metrics_enabled):
+        """Initialize the notifier.
+
+        Parameters:
+            notifier: oslo messaging notifier
+            log: log sink
+            mem_queue_size: capacity of the event buffer
+            metrics_enabled: whether statsd metrics shall be emitted
+        """
         super(_MessagingNotifier, self).__init__(
             name='async auditmiddleware notifications')
         self._log = log
@@ -45,6 +82,7 @@ class _MessagingNotifier(Thread):
             if metrics_enabled else None
 
     def _create_statsd_client(self):
+        """Create a statsd client."""
         try:
             import datadog
 
@@ -55,6 +93,7 @@ class _MessagingNotifier(Thread):
         except ImportError:
             self._log.warning("Python datadog package not installed. No "
                               "openstack_audit_* metrics will be produced.")
+            return None
 
     def notify(self, context, payload):
         self.enqueue_notification(payload, context)
@@ -110,7 +149,7 @@ class _MessagingNotifier(Thread):
                         'payload': payload})
 
     def flush_to_log(self):
-        # flush all queued messages to log, starting with context, payload
+        """Flush all queued messages to log, starting with context, payload."""
         try:
             while True:
                 payload, context = self._queue.get_nowait()
@@ -120,6 +159,7 @@ class _MessagingNotifier(Thread):
 
 
 def create_notifier(conf, log, metrics_enabled):
+    """Create a new notifier."""
     if oslo_messaging:
         transport = oslo_messaging.get_notification_transport(
             conf,

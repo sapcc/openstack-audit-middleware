@@ -9,19 +9,21 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-import uuid
 
-import webob
-import webob.dec
+"""Base functionality for all tests."""
+
+import auditmiddleware
+from auditmiddleware._api import _make_tags
+from auditmiddleware.tests.unit import utils
 from mock import mock
 from oslo_config import fixture as cfg_fixture
 from oslo_messaging import conffixture as msg_fixture
 from oslotest import createfile
 from testtools.matchers import MatchesRegex
+import uuid
+import webob
+import webob.dec
 
-import auditmiddleware
-from auditmiddleware._api import _make_tags
-from auditmiddleware.tests.unit import utils
 
 iso8601 = r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
 
@@ -72,6 +74,12 @@ user_counter = 0
 
 
 class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
+    """Base class of all auditmiddleware tests.
+
+    Takes care of middleware configuration, scoping and common
+    functionality to build fixtures and validate test outcomes.
+    """
+
     def setUp(self):
         """Set up common parts of all test-cases here."""
         super(BaseAuditMiddlewareTest, self).setUp()
@@ -136,7 +144,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
     def get_environ_header(self, req_type=None):
         """Provide the headers usually the keystonemiddleware would provide."""
-
         env_headers = {'HTTP_X_USER_ID': self.user_id,
                        'HTTP_X_USER_NAME': self.username,
                        'HTTP_X_AUTH_TOKEN': 'token',
@@ -149,11 +156,12 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
     def build_event(self, req, resp=None, middleware_cfg=None,
                     record_payloads=False, metrics_enabled=True):
         """Trigger the creation of a single event from a request/response.
-        
+
         Parameters:
             req: webob request
             resp: webeb response (unless we have a negative test)
-            middleware_cfg (optional): override standard path to the mapping file
+            middleware_cfg (optional): override standard path to the mapping
+                file
             record_payloads: option to add request payloads to the CADF event
             metrics_enabled: enable/disable creation of metrics
         """
@@ -167,8 +175,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                 payload_attachment = [x['name'] for x in ev['attachments']]
                 self.assertIn('payload', payload_attachment,
                               'payload attachment missing')
-                self.assertEquals(1, payload_attachment.count('payload'),
-                                  "too many payload attachments")
+                self.assertEqual(1, payload_attachment.count('payload'),
+                                 "too many payload attachments")
             else:
                 self.assertNotIn('payload',
                                  [x['name'] for x in ev.get('attachments',
@@ -184,8 +192,10 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
 
         Parameters:
             req: webob request
-            resp: webeb response (unless we have a negative test)
-            middleware_cfg (optional): override standard path to the mapping file
+            resp: webeb response (unless we have a negative
+                test)
+            middleware_cfg (optional): override standard path to the mapping
+                file
             record_payloads: option to add request payloads to the CADF event
             metrics_enabled: enable/disable creation of metrics
         """
@@ -286,21 +296,20 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             self.assertEqual(event['reason']['reasonCode'],
                              str(response.status_code))
 
-        # TODO check observer
         self.assertEqual(event['requestPath'], request.path)
 
     def build_url(self, res, host_url=None, prefix='', suffix=None,
                   res_id=None,
                   child_res=None, child_res_id=None):
         """Build a REST URL.
-        
+
         Parameters:
             res: name of the target resource type
             host_url: URL without path
             prefix: prefix of the URL path (e.g. v2/<tenant>)
             res_id: object ID of the resource
             child_res: target child resource (if target is nested)
-            child_res_id: object ID of child resource 
+            child_res_id: object ID of child resource
         """
         url = host_url if host_url else 'http://admin_host:8774' + prefix
         url += '/' + res

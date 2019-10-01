@@ -10,15 +10,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""Tests for the logging driver."""
+
+from auditmiddleware.tests.unit import base
 import fixtures
 import mock
 
-from auditmiddleware.tests.unit import base
-
 
 class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
+    """Test the 'log' driver for notifications."""
 
     def setUp(self):
+        """Set up the test by patching the messaging layer."""
         p = 'auditmiddleware._notifier.oslo_messaging'
         f = fixtures.MockPatch(p, None)
         self.messaging_fixture = self.useFixture(f)
@@ -26,6 +29,7 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
         super(TestLoggingNotifier, self).setUp()
 
     def test_api_request_no_messaging(self):
+        """Test that logging works and event_type is correct."""
         app = self.create_simple_app()
 
         with mock.patch('auditmiddleware._LOG.info') as log:
