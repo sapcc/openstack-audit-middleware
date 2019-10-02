@@ -449,7 +449,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url)
         event = self.build_event(request, response)
 
-        self.assertEqual(None, event, "Event should have been suppressed")
+        self.assertIsNone(event, "Event should have been suppressed")
 
     def test_post_action_suppressed(self):
         """Test rules for path-encoded actions.
@@ -463,7 +463,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url)
         event = self.build_event(request, response)
 
-        self.assertEqual(None, event, "Event should have been suppressed")
+        self.assertIsNone(event, "Event should have been suppressed")
 
     def test_get_action_generic(self):
         """Test generic rules for path-encoded actions.
@@ -496,8 +496,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=payload_content)
         event = self.build_event(request, response, record_payloads=True)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
-                         + "/set",
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/set",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -542,8 +542,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url,
                                                 req_json={"unknown": "bla"})
         event = self.build_event(request, response)
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
-                         + "/unknown", "compute/server", rid)
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/unknown", "compute/server", rid)
 
     def test_post_resource_undeclared(self):
         """Test that resource paths w/o mapping are still causing events.

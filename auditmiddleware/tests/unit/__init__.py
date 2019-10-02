@@ -24,5 +24,3 @@ The tests here cover the following aspects:
     - validity of the mapping files for the various OpenStack services
       (test_mappings.py)
 """
-
-# empty

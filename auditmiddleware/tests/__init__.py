@@ -19,5 +19,3 @@ the inherent modularity of paste pipeline filters, unit testing is quite
 sufficient here as long as the integration tests for the OpenStack
 services are run together with this middleware.
 """
-
-# empty

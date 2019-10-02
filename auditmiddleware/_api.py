@@ -93,8 +93,8 @@ def str_map(param):
         return {}
 
     for k, v in six.iteritems(param):
-        if v is not None and (not isinstance(k, six.string_types)
-                              or not isinstance(v, six.string_types)):
+        if v is not None and (not isinstance(k, six.string_types) or
+                              not isinstance(v, six.string_types)):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
 
@@ -115,9 +115,9 @@ def payloads_config(param):
 def _make_tags(ev):
     """Build statsd metric tags from CADF event."""
     return [
-        'project_id:{0}'.format(ev.target.project_id
-                                or ev.initiator.project_id
-                                or ev.initiator.domain_id),
+        'project_id:{0}'.format(ev.target.project_id or
+                                ev.initiator.project_id or
+                                ev.initiator.domain_id),
         'target_type_uri:{0}'.format(ev.target.typeURI),
         'action:{0}'.format(ev.action),
         'outcome:{0}'.format(ev.outcome)]
@@ -587,8 +587,8 @@ class OpenStackAuditMiddleware(object):
                 # some custom ID fields are no UUIDs/strings but just integers
                 rid = rid or str(payload.get(res_spec.id_field))
 
-                project_id = (target_project or payload.get('project_id')
-                              or payload.get('tenant_id'))
+                project_id = (target_project or payload.get('project_id') or
+                              payload.get('tenant_id'))
             else:
                 project_id = target_project
                 self._log.warning(
