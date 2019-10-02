@@ -55,6 +55,7 @@ resources:
         custom_id: name
     migrations:
     migrations_legacy_api:
+        # here is an example how to map distinct API paths to the same resource type
         api_name: os-migrations
         type_uri: compute/migrations
     os-server-external-events:
@@ -79,6 +80,7 @@ resources:
     servers:
         payloads:
             exclude:
+              # will not be part of event nor be DEBUG logged
               - adminPass
         custom_actions:
             # server actions
