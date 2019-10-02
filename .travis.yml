@@ -14,10 +14,10 @@ matrix:
   - python: "3.6"
     env:
     - TOXENV=py36
-#  - python: "3.7"
-#    dist: xenial
-#    env:
-#    - TOXENV=pep8
+  - python: "3.7"
+    dist: xenial
+    env:
+    - TOXENV=pep8
   - python: "3.7"
     dist: xenial
     env:
@@ -26,4 +26,8 @@ install:
 - pip install tox-travis
 - pip install discover
 - pip install coverage
-script: tox
+- pip install coveralls
+script:
+- tox
+after_success:
+- coveralls --service travis-ci

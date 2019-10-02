@@ -9,6 +9,9 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
+"""Test the event creation logic."""
+
 import json
 import uuid
 
@@ -18,12 +21,16 @@ from auditmiddleware.tests.unit import base
 
 
 class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
+    """This test suite checks the mapping from API calls to events."""
+
     def setUp(self):
+        """Set up the test by setting the service info."""
         super(AuditApiLogicTest, self).setUp()
         self.service_name = 'nova'
         self.service_type = 'compute'
 
     def test_get_list(self):
+        """Test listing of resources using GET."""
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
@@ -33,8 +40,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          self.service_name)
 
     def test_get_list_child(self):
+        """Test listing of resource children using GET."""
         rid = str(uuid.uuid4().hex)
-        # this property is modelled as singleton
         key = "os-volume_attachments"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res=key)
@@ -45,6 +52,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server/volume-attachments", rid)
 
     def test_get_read(self):
+        """Test reading of resources using HTTP GET."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
@@ -55,6 +63,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_head_read(self):
+        """Test existence of resources using HTTP HEAD."""
         rid = str(uuid.uuid4().hex)
         # such API does not exist in Nova
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -66,6 +75,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_put(self):
+        """Test upsert of resources using HTTP PUT."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
@@ -76,6 +86,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_patch(self):
+        """Test selective update of resource attributes using HTTP PATCH."""
         rid = str(uuid.uuid4().hex)
         # such API does not exist in Nova
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -87,6 +98,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_patch_custom_attr(self):
+        """Test selective update of custom resource attributes using PATCH."""
         rid = str(uuid.uuid4().hex)
         custom_value = {'child1': 'test'}
         # such API does not exist in Nova
@@ -110,6 +122,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                       "attachment should contain custom_attr value")
 
     def test_delete(self):
+        """Test deletion of resources using HTTP DELETE."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
@@ -119,10 +132,10 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_DELETE,
                          "compute/server", rid)
 
-    #  /v2/a759dcc2a2384a76b0386bb985952373/servers/805780cd-9934-42bd-a0b3
-    # -6db177a656b5/os-volume_attachments/e733127c-4bae-429c-bd01-a89ff0b109a2
     def test_delete_child(self):
-        """ verify fix for
+        """Test deletion of child resources using HTTP DELETE.
+
+        regression test for
         https://github.com/sapcc/openstack-audit-middleware/issues/8
         """
         rid = str(uuid.uuid4().hex)
@@ -138,9 +151,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server/volume-attachment", rid2)
 
     def test_delete_all(self):
-        """ delete all child-resources at once, i.e. delete w/o child ID
-        :return:
-        """
+        """Test deletion of all child-resources at once."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res='tags')
@@ -151,6 +162,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server/tags", rid)
 
     def test_delete_fail(self):
+        """Test proper event for failed resource delete actions."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
@@ -160,7 +172,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         self.check_event(request, response, event, taxonomy.ACTION_DELETE,
                          "compute/server", rid, outcome="failure")
 
-    # TODO: uncomment for swift (which requires a new API pattern)
+    #  uncomment for swift (which requires a new API pattern)
     # def test_head(self):
     #     rid = str(uuid.uuid4().hex)
     #     url = self.build_url('images', prefix='/v1/' + self.project_id,
@@ -173,6 +185,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     #
 
     def test_post_update(self):
+        """Test resource updates using HTTP POST."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid)
@@ -183,6 +196,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_put_update_child(self):
+        """Test child resource updates using HTTP PUT."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              res_id=rid, child_res="metadata")
@@ -193,6 +207,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server/metadata", rid)
 
     def test_put_singleton_key(self):
+        """Test setting keys (custom attributes) from singleton resources."""
         rid = str(uuid.uuid4().hex)
         key = "server_meta_key"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -211,6 +226,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                       "attachment should contain key " + key)
 
     def test_delete_singleton_key(self):
+        """Test deleting keys (custom attributes) from singleton resources."""
         rid = str(uuid.uuid4().hex)
         key = "server_meta_key"
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -229,6 +245,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                       "attachment should contain key " + key)
 
     def test_get_singleton_child_read_key(self):
+        """Test reading keys from singleton child resources."""
         rid = str(uuid.uuid4().hex)
         # this property is modelled as custom action
         key = "server_meta_key"
@@ -248,6 +265,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                       "attachment should contain key " + key)
 
     def test_post_create(self):
+        """Test resource creation using HTTP POST."""
         rid = str(uuid.uuid4().hex)
         rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
@@ -260,6 +278,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid, rname)
 
     def test_post_create_rec_payload(self):
+        """Test presence of payload attachment."""
         rid = str(uuid.uuid4().hex)
         rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
@@ -281,6 +300,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                       "event attachments should contain payload")
 
     def test_post_create_neutron_style(self):
+        """Test creation of resources with target project-id in the URL."""
         rid = str(uuid.uuid4().hex)
         rname = 'server1'
         url = self.build_url('servers', prefix='/v2/' + self.project_id)
@@ -292,6 +312,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid, rname)
 
     def test_post_create_cross_project_wrapped(self):
+        """Test creation of resources in another project using HTTP POST."""
         rid = str(uuid.uuid4().hex)
         pid = str(uuid.uuid4().hex)
         rname = 'server1'
@@ -308,6 +329,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "project_id for cross-project create actions")
 
     def test_post_create_multiple_wrapped(self):
+        """Test batch creation of resources using HTTP POST."""
         items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i),
                   'custom_attr': 'custom-' + str(i),
                   'hidden_attr': 'hidden-' + str(i)} for i in range(3)]
@@ -348,8 +370,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                           "attachment should contain custom_attr value")
 
     def test_post_create_multiple_cross_project_wrapped(self):
-        """ test cross-project batch creation.
-        """
+        """Test batch creation of resources with mixture of target projects."""
         items = [{'id': str(uuid.uuid4().hex), 'name': 'name-' + str(i),
                   'project_id': str(uuid.uuid4().hex)} for
                  i in range(3)]
@@ -385,6 +406,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                           "event attachments should contain payload")
 
     def test_post_create_child(self):
+        """Test creation of child resources via HTTP POST."""
         rid = str(uuid.uuid4().hex)
         child_rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -397,6 +419,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server/interface", target_id=child_rid)
 
     def test_post_action(self):
+        """Test invocation of custom actions via HTTP POST."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
@@ -415,8 +438,10 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          req_json)
 
     def test_post_action_generic_suppressed(self):
-        """test generic rules for path-encoded actions: suppress event via null
-        e.g. "POST:*": null"
+        """Test generic rules for path-encoded actions.
+
+        Suppress event for a HTTP method by mapping to `null`,
+        e.g. `POST:*: null`.
         """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -424,11 +449,13 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url)
         event = self.build_event(request, response)
 
-        self.assertEqual(None, event, "Event should have been suppressed")
+        self.assertIsNone(event, "Event should have been suppressed")
 
     def test_post_action_suppressed(self):
-        """test generic rules for path-encoded actions: suppress event via null
-        e.g. "POST:*": null"
+        """Test rules for path-encoded actions.
+
+        Suppress event for a specific action by mapping to `null`
+        e.g. `suppress: null`.
         """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -436,11 +463,14 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         request, response = self.build_api_call('POST', url)
         event = self.build_event(request, response)
 
-        self.assertEqual(None, event, "Event should have been suppressed")
+        self.assertIsNone(event, "Event should have been suppressed")
 
     def test_get_action_generic(self):
-        """test generic rules for path-encoded actions
-        e.g. "GET:*": "read/*"
+        """Test generic rules for path-encoded actions.
+
+        Map all HTTP methods to an action prefix,
+        e.g. `GET:*: read/*` to put a `read/` prefix
+        in front of any action suffix of the URL path.
         """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
@@ -452,6 +482,10 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_put_key(self):
+        """Test attaching custom attributes (keys) to resources.
+
+        Keys are used to add user-defined attributes to resources.
+        """
         rid = str(uuid.uuid4().hex)
         key = "somekey"
         payload_content = {"meta": {key: "ignored here"}}
@@ -462,8 +496,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                                 req_json=payload_content)
         event = self.build_event(request, response, record_payloads=True)
 
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
-                         + "/set",
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/set",
                          "compute/server/metadata", rid)
         key_attachment = {'name': 'key',
                           'typeURI': 'xs:string',
@@ -479,6 +513,11 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                       "event attachments should contain payload")
 
     def test_post_action_missing_payload(self):
+        """Test that actions lacking a payload cause no event.
+
+        Custom actions that do not created resources, do not always
+        create a response message.
+        """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
@@ -489,16 +528,29 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                                  "be ignored")
 
     def test_post_undefined_action_generic(self):
+        """Test that actions w/o declared mapping are still causing events.
+
+        Actions encoded in the payload do not need require a mapping entry
+        if they follow the standard OpenStack pattern for actions.
+
+        That pattern is that the URL path ends with `/action` and the
+        JSON payload has a root attribute named after the action.
+        """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
         request, response = self.build_api_call('POST', url,
                                                 req_json={"unknown": "bla"})
         event = self.build_event(request, response)
-        self.check_event(request, response, event, taxonomy.ACTION_UPDATE
-                         + "/unknown", "compute/server", rid)
+        self.check_event(request, response, event, taxonomy.ACTION_UPDATE +
+                         "/unknown", "compute/server", rid)
 
     def test_post_resource_undeclared(self):
+        """Test that resource paths w/o mapping are still causing events.
+
+        Those events can be spotted by the "X" prefixing the resource
+        name derived from the URL path.
+        """
         rid = str(uuid.uuid4().hex)
         rname = "myname"
         url = self.build_url('yetunknowns', prefix='/v2/' + self.project_id)
@@ -511,6 +563,11 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/Xyetunknown", rid, rname)
 
     def test_put_resource_undeclared(self):
+        """Test that resource paths w/o mapping are still causing events.
+
+        Those events can be spotted by the "X" prefixing the resource
+        name derived from the URL path.
+        """
         rid = str(uuid.uuid4().hex)
         rid2 = str(uuid.uuid4().hex)
         url = self.build_url('yetunknowns', prefix='/v2/' + self.project_id,
@@ -523,6 +580,11 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/Xyetunknown/Xuchild", rid2)
 
     def test_post_action_no_response(self):
+        """Test events are created for POST actions with no response payload.
+
+        The implementation must not assume that a response always has a
+        payload.
+        """
         rid = str(uuid.uuid4().hex)
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="action", res_id=rid)
@@ -534,6 +596,10 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/server", rid)
 
     def test_get_service_action(self):
+        """Test singleton actions directed at a service.
+
+        Those should create events where the target has no ID but a name
+        """
         url = self.build_url('servers', prefix='/v2/' + self.project_id,
                              suffix="detail")
         request, response = self.build_api_call('GET', url)
@@ -543,7 +609,8 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
                          "compute/servers", None,
                          self.service_name)
 
-        # TODO: fix and enable for Swift
+        # this test needs to be passed for Swift. Currently audit-middleware
+        # does not support the REST patterns implemented by Swift
         # def test_no_auth_token(self):
         #     # Test cases where API requests such as Swift list public
         # containers

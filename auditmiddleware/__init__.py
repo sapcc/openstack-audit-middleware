@@ -11,12 +11,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""
-Build open standard audit information based on incoming requests.
+"""Build open standard audit information based on incoming requests.
 
-AuditMiddleware filter should be placed after keystonemiddleware.auth_token
-in the pipeline so that it can utilise the information the Identity server
-provides.
+AuditMiddleware filter should be placed after
+keystonemiddleware.auth_token in the pipeline so that it can utilise the
+information the Identity server provides.
 """
 
 from auditmiddleware import _api
@@ -92,6 +91,8 @@ def _log_and_ignore_error(fn):
 
 
 class ConfigError(BaseException):
+    """Exception for configuration errors."""
+
     pass
 
 
@@ -105,6 +106,12 @@ class AuditMiddleware(object):
     """
 
     def __init__(self, app, **conf):
+        """Initialize the middleware based on the application config.
+
+        Parameters:
+            app: the web application exteneded by this middleware
+            conf: the application specific configuration parameters as dict
+        """
         self._application = app
         self._conf = CONF
 
@@ -125,6 +132,7 @@ class AuditMiddleware(object):
 
     @_log_and_ignore_error
     def _process_request(self, request, response=None):
+        """Create & push events for request/response pair."""
         events = self._cadf_audit.create_events(request, response)
 
         if events:
@@ -135,6 +143,7 @@ class AuditMiddleware(object):
 
     @webob.dec.wsgify
     def __call__(self, req):
+        """Here is the actual application call that we are "decorating"."""
         if req.method in self._ignore_req_list:
             return req.get_response(self._application)
 
