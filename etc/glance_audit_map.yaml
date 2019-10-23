@@ -1,0 +1,17 @@
+service_type: 'storage/image'
+service_name: 'glance'
+
+prefix: '/v2'
+
+resources:
+  images:
+    custom_actions: import
+    children:
+      members:
+      tags:
+        singleton: true
+      file:
+        singleton: true
+      stage:
+        singleton: true
+  tasks:
