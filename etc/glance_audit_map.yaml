@@ -5,9 +5,10 @@ prefix: '/v2'
 
 resources:
   images:
-    custom_actions: import
+    custom_actions:
+      import: create/import # action for workflow
     children:
-      members:
+      members: # default mapping
       tags:
         singleton: true
       file:
