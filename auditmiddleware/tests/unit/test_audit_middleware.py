@@ -91,7 +91,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
 
         req = webob.Request.blank(path,
                                   environ=self.get_environ_header('GET'))
-        req.context = {}
+        req.environ['audit.context'] = {}
 
         middleware = self.create_simple_middleware()
         middleware._process_request(req, webob.response.Response())
@@ -139,7 +139,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
 
         req = webob.Request.blank(path,
                                   environ=self.get_environ_header('GET'))
-        req.context = {}
+        req.environ['audit.context']= {}
         self.notifier.notify.side_effect = Exception('error')
 
         middleware(req)
@@ -164,7 +164,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         req = webob.Request.blank(url,
                                   environ=self.get_environ_header('GET'),
                                   remote_addr='192.168.0.1')
-        req.context = {}
+        req.environ['audit.context'] = {}
         middleware._process_request(req)
         payload = self.notifier.notify.call_args_list[0][0][1]
         self.assertEqual(payload['outcome'], 'unknown')
