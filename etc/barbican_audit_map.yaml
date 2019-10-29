@@ -1,0 +1,21 @@
+service_type: 'data/security'
+service_name: 'barbican'
+
+prefix: '/v1'
+
+resources:
+  secrets:
+    children:
+      metadata:
+      acl:
+  secret-stores:
+    children:
+      preferred:
+  containers:
+    chlldren:
+      secrets:
+      acl:
+  project-quotas:
+  consumers:
+  orders:
+  
