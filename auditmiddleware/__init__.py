@@ -129,9 +129,9 @@ class AuditMiddleware(object):
 
         if events:
             # currently there is nothing useful in the context
-            context = {}
+            request.environ['audit.context'] = {}
             for e in events:
-                self._notifier.notify(context, e.as_dict())
+                self._notifier.notify(request.environ['audit.context'], e.as_dict())
 
     @webob.dec.wsgify
     def __call__(self, req):
@@ -141,7 +141,7 @@ class AuditMiddleware(object):
         # Cannot use a RequestClass on wsgify above because the `req` object is
         # a `WebOb.Request` when this method is called so the RequestClass is
         # ignored by the wsgify wrapper.
-        req.context = oslo_context.get_admin_context().to_dict()
+        req.environ['audit.context'] = oslo_context.get_admin_context().to_dict()
 
         try:
             response = req.get_response(self._application)
