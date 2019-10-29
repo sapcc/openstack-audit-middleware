@@ -139,7 +139,7 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
 
         req = webob.Request.blank(path,
                                   environ=self.get_environ_header('GET'))
-        req.environ['audit.context']= {}
+        req.environ['audit.context'] = {}
         self.notifier.notify.side_effect = Exception('error')
 
         middleware(req)
