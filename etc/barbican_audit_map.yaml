@@ -7,12 +7,15 @@ resources:
   secrets:
     children:
       metadata:
+        # collection of fields/keys
+        singleton: true
+        type_name: meta
       acl:
   secret-stores:
     children:
       preferred:
   containers:
-    chlldren:
+    children:
       secrets:
       acl:
   project-quotas:
