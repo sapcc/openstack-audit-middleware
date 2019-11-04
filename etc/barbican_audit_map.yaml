@@ -11,9 +11,11 @@ resources:
         singleton: true
         type_name: meta
       acl:
+        singleton: true
   secret-stores:
     children:
       preferred:
+        singleton: true
   containers:
     children:
       secrets:
