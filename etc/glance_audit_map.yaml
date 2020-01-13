@@ -16,3 +16,4 @@ resources:
       stage:
         singleton: true
   tasks:
+  # default mapping
