@@ -203,13 +203,6 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         middleware = auditmiddleware._api.OpenStackAuditMiddleware(
             cfg, record_payloads, metrics_enabled=metrics_enabled)
         events = middleware.create_events(req, resp) or []
-        if metrics_enabled:
-            for e in events:
-                self.assert_statsd_counter('events', 1,
-                                           tags=_make_tags(e))
-            # will not check for operational metrics
-        else:
-            self.statsd_report_mock.assert_not_called()
 
         return [e.as_dict() for e in events]
 

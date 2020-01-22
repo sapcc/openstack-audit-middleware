@@ -47,8 +47,7 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
             # and not the one specified in DEFAULT section
             time.sleep(1)
             self.assertTrue(driver.called)
-            self.assert_statsd_counter('errors', 1)
-
+            
     def test_conf_middleware_log_and_default_as_messaging(self):
         """Make sure log driver is invoked when configured.
 
@@ -111,13 +110,13 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         for _ in range(0, invocations):
             app.get(path, extra_environ=self.get_environ_header())
         # check that the backlog has grown
-        self.assert_statsd_gauge('backlog', 1)
+        # self.assert_statsd_gauge('backlog', 1)
         time.sleep(1)
         for _ in range(0, invocations):
             delay()
         self.assertTrue(driver.called)
         # check that the backlog has been reset
-        self.assert_statsd_gauge('backlog', 0)
+        # self.assert_statsd_gauge('backlog', 0)
 
     @mock.patch('oslo_messaging.notify.messaging.MessagingDriver'
                 '.notify', side_effect=delay)
