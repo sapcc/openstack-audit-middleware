@@ -585,7 +585,9 @@ class OpenStackAuditMiddleware(object):
             if isinstance(payload, dict):
                 name = payload.get(res_spec.name_field)
                 # some custom ID fields are no UUIDs/strings but just integers
-                rid = rid or str(payload.get(res_spec.id_field))
+                if not rid:
+                    custom_id = payload.get(res_spec.id_field)
+                    rid = str(custom_id) if custom_id else None
 
                 project_id = (target_project or payload.get('project_id') or
                               payload.get('tenant_id'))
