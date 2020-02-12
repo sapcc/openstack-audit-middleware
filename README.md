@@ -207,7 +207,8 @@ Attributes of special importance can be added to every update-like event by spec
  * `custom_attributes`: list attributes of special importance whose values should always be attached to the event; Assign a type URI, so they can be shown in UIs properly (default: [])
 
 
-Some resources exist only once, i.e. they only have a single _instance_ and thus no unique ID.This is controlled by the following attribute:
+A singleton resource is a api url call that will always lead to only one resource. Some resources exist only once,
+i.e. they only have a single _instance_ and thus no unique ID.  This is controlled by the following attribute:
 
   * `singleton`: `true` when only a single instance of a resource exists. Otherwise the resource is a _collection_, i.e. an ID needs to be specified for address individual resource instances in a URL (default: `false`)
 
