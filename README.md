@@ -8,6 +8,7 @@
   * Manila
   * Glance
   * Barbican
+  * Ironic
 
 Additional APIs can be supported without major code changes through templates.
 
