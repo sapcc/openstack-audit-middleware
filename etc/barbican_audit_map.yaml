@@ -18,6 +18,7 @@ resources:
       preferred:
         singleton: true
   containers:
+    custom_id: container_ref
     children:
       secrets:
       acl:
