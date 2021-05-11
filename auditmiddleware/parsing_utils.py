@@ -10,8 +10,8 @@ from pycadf.attachment import Attachment
 _method_action_map = {'GET': taxonomy.ACTION_READ,
                       'HEAD': taxonomy.ACTION_READ,
                       'PUT': taxonomy.ACTION_UPDATE,
-                      'PATCH': taxonomy.ACTION_UPDATE, 'POST':
-                          taxonomy.ACTION_CREATE,
+                      'PATCH': taxonomy.ACTION_UPDATE,
+                      'POST': taxonomy.ACTION_CREATE,
                       'DELETE': taxonomy.ACTION_DELETE}
 
 
@@ -37,7 +37,7 @@ def _make_tags(ev):
         'outcome:{0}'.format(ev.outcome)]
 
 
-def _make_uuid(s):
+def make_uuid(s):
     if s.isdigit():
         return str(uuid.UUID(int=int(s)))
     else:
@@ -124,3 +124,85 @@ def to_path_segments(path_string):
     path_string = path_string.rstrip("/").replace(".json", "")
     path_segments = path_string.lstrip('/').split('/')
     return path_segments
+
+
+def get_json_if(condition, response):
+    useful_payload = {}
+    if condition \
+            and response \
+            and response.content_length > 0 \
+            and response.content_type == "application/json":
+        useful_payload = response.json
+    return useful_payload
+
+
+def find_bulk_targets(response_payload, res_spec):
+    if not response_payload or res_spec.singleton:
+        return []
+    resource = response_payload.get(res_spec.type_name, [])
+    list_of_targets = resource if isinstance(resource, list) else []
+    return list_of_targets
+
+
+def attach_payload(event, payload, res_spec):
+    """Attach request payload to event."""
+    res_payload = clean_payload(
+        payload, res_spec)
+    if res_payload:
+        attach_val = Attachment(typeURI="mime:application/json",
+                                content=json.dumps(res_payload,
+                                                   separators=(',', ':')),
+                                name='payload')
+        event.add_attachment(attach_val)
+
+
+def clean_payload(payload, res_spec):
+    """Clean request payload of sensitive info."""
+    incl = res_spec.payloads.get('include')
+    excl = res_spec.payloads.get('exclude')
+    res_payload = {}
+    if excl and isinstance(payload, dict):
+        # make a copy so we do not change the original request
+        res_payload = payload.copy()
+        # remove possible wrapper elements
+        for k in excl:
+            res_payload.pop(k, None)
+    elif incl and isinstance(payload, dict):
+        for k in incl:
+            v = payload.get(k)
+            if v:
+                res_payload[k] = v
+    else:
+        res_payload = payload
+
+    return res_payload
+
+
+def clean_or_unwrap(attachable_request_body, bulk_operation_payloads,
+                    relevant_response_json, target_config):
+    if bulk_operation_payloads:
+        response_payloads = [clean_payload(payload, target_config.spec)
+                             for payload in bulk_operation_payloads]
+        request_payloads = iter(attachable_request_body.get(target_config.spec.type_name, []))
+
+    elif relevant_response_json:
+        response_payloads = [relevant_response_json.get(target_config.spec.el_type_name,
+                                                        relevant_response_json)]
+        request_payloads = [attachable_request_body.get(target_config.spec.el_type_name,
+                                                        attachable_request_body)]
+
+    else:
+        response_payloads = []
+        request_payloads = [attachable_request_body]
+    return request_payloads, response_payloads
+
+
+def attach_custom_attributes(ev, spec, subpayload):
+    for attr, typeURI in six.iteritems(spec.custom_attributes):
+        value = subpayload.get(attr)
+        if value:
+            if not isinstance(value, six.string_types):
+                value = json.dumps(value, separators=(',', ':'))
+            attach_val = Attachment(typeURI=typeURI, content=value,
+                                    name=attr)
+            ev.add_attachment(attach_val)
