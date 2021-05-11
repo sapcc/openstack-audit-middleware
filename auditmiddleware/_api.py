@@ -29,7 +29,7 @@ from pycadf import resource
 from pycadf.attachment import Attachment
 
 from auditmiddleware.parsing_utils import payloads_config, _make_tags, _make_uuid, str_map, _clean_payload, \
-    _attach_payload, _build_service_id, _get_action_from_method, to_path_segments
+    _attach_payload, _build_service_id, get_action_from_method, to_path_segments
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -205,9 +205,15 @@ class OpenStackAuditMiddleware(object):
         # reverse to pop first elements first
         path_segments.reverse()
         target_config, suffix = self._map_path_to_resource(self._resource_specs, None, None, request, path_segments)
+
+        action, key = self._get_action_and_key(target_config, request, suffix)
+        if not action:
+            self._log.info("ignoring request with path: %s; because action was suppressed by config or not found",
+                           request.path)
+            return []
         return self._create_events(target_project, target_config.id, target_config.parent_id,
                                    target_config.spec, request,
-                                   response, suffix)
+                                   response, action, key)
 
     def _map_path_to_resource(
             self, res_spec, res_id, res_parent_id,
@@ -289,7 +295,7 @@ class OpenStackAuditMiddleware(object):
 
     def _create_events(self, target_project, res_id,
                        res_parent_id,
-                       res_spec, request, response, suffix=None):
+                       res_spec, request, response, action, suffix=None):
         events = []
 
         # check for update operations (POST, PUT, PATCH)
@@ -315,7 +321,7 @@ class OpenStackAuditMiddleware(object):
                                                          res_id,
                                                          res_parent_id,
                                                          request, response,
-                                                         subpayload, suffix)
+                                                         subpayload, action, suffix)
                     pl = next(req_pl) if req_pl else None
                     if ev:
                         if pl:
@@ -334,7 +340,7 @@ class OpenStackAuditMiddleware(object):
                                                         res_id,
                                                         res_parent_id,
                                                         request, response,
-                                                        res_payload, suffix)
+                                                        res_payload, action, suffix)
 
                 if not event:
                     return []
@@ -353,7 +359,7 @@ class OpenStackAuditMiddleware(object):
         else:
             event = self._create_cadf_event(target_project, res_spec, res_id,
                                             res_parent_id,
-                                            request, response, suffix)
+                                            request, response, action, suffix)
             if not event:
                 return []
 
@@ -373,12 +379,12 @@ class OpenStackAuditMiddleware(object):
 
     def _create_event_from_payload(self, target_project, res_spec, res_id,
                                    res_parent_id, request, response,
-                                   subpayload, suffix=None):
+                                   subpayload, action, suffix=None):
         self._log.debug("create event from payload: %s",
                         _clean_payload(subpayload, res_spec))
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
-                                     response, suffix)
+                                     response, action, suffix)
         if not ev:
             return None
 
@@ -399,12 +405,7 @@ class OpenStackAuditMiddleware(object):
         return ev
 
     def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
-                           request, response, suffix):
-
-        action, key = self._get_action_and_key(res_spec, res_id, request,
-                                               suffix)
-        if not action:
-            return None
+                           request, response, action, key):
 
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
         domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
@@ -507,7 +508,8 @@ class OpenStackAuditMiddleware(object):
 
         return observer
 
-    def _get_action_and_key(self, res_spec, res_id, request, suffix):
+    def _get_action_and_key(self, target_config,
+                            request, suffix):
         """Determine the CADF action and key from the request.
 
         Depending on already known information, this function will
@@ -515,20 +517,22 @@ class OpenStackAuditMiddleware(object):
         which CADF action to report.
 
         Parameters:
-            res_spec: target resource descriptor
+            target_config: target resource descriptor
             request: the request
             suffix: the last path component (already known)
         """
         if suffix is None:
-            return _get_action_from_method(request.method, res_spec,
-                                           res_id), None
+            return get_action_from_method(request.method, target_config.spec,
+                                          target_config.id), None
 
         if suffix == 'action':
-            action = self._get_action_from_payload(request, res_spec, res_id)
+            action = self._get_action_from_payload(request, target_config.spec,
+                                                   target_config.id)
             return action, None
 
         return self._get_action_and_key_from_path_suffix(
-            suffix, request.method, res_spec, res_id)
+            suffix, request.method, target_config.spec,
+            target_config.id)
 
     def _get_action_and_key_from_path_suffix(self, path_suffix, method,
                                              res_spec, res_id):
@@ -550,7 +554,7 @@ class OpenStackAuditMiddleware(object):
                 return None, None
 
         # no action mapped to suffix => custom key
-        action = _get_action_from_method(method, res_spec, res_id)
+        action = get_action_from_method(method, res_spec, res_id)
         action += _key_action_suffix_map[action]
         return action, path_suffix
 
@@ -566,7 +570,7 @@ class OpenStackAuditMiddleware(object):
                     return action
 
                 # apply generic default mapping rule here
-                return _get_action_from_method(
+                return get_action_from_method(
                     request.method, res_spec, res_id) + '/' + rest_action
             else:
                 self._log.warning("/action URL without payload: %s",
@@ -590,4 +594,3 @@ class OpenStackAuditMiddleware(object):
             project = g.groupdict().get('project_id', '')
             return path, project
         return None, None
-

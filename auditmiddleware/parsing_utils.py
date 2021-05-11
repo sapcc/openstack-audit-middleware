@@ -101,7 +101,7 @@ def _build_service_id(name):
     return str(uuid.uuid5(ns, socket.getfqdn()))
 
 
-def _get_action_from_method(method, res_spec, res_id):
+def get_action_from_method(method, res_spec, res_id):
     """Determine the CADF action from the HTTP method."""
     if method == 'POST':
         if res_id or res_spec.singleton:
