@@ -13,23 +13,23 @@
 """This package contains the logic for creating events from API requests."""
 
 import collections
-import hashlib
 import json
 import os
 import re
-import six
-import socket
-import uuid
-import yaml
 
+import six
+import yaml
 from oslo_log import log as logging
-from pycadf.attachment import Attachment
 from pycadf import cadftaxonomy as taxonomy
 from pycadf import cadftype
 from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
 from pycadf import resource
+from pycadf.attachment import Attachment
+
+from auditmiddleware.parsing_utils import payloads_config, _make_tags, _make_uuid, str_map, _clean_payload, \
+    _attach_payload, _build_service_id, _get_action_from_method
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -39,12 +39,6 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
                                        'children', 'payloads'])
 
 # default mappings from HTTP methods to CADF actions
-_method_action_map = {'GET': taxonomy.ACTION_READ,
-                      'HEAD': taxonomy.ACTION_READ,
-                      'PUT': taxonomy.ACTION_UPDATE,
-                      'PATCH': taxonomy.ACTION_UPDATE, 'POST':
-                          taxonomy.ACTION_CREATE,
-                      'DELETE': taxonomy.ACTION_DELETE}
 # action suffixes for operations on custom keys (modelled as path suffixes)
 _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_UPDATE: '/set',
@@ -53,13 +47,6 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
 
 # matcher for UUIDs
 _UUID_RE = re.compile("[0-9a-f-]+$")
-
-
-def _make_uuid(s):
-    if s.isdigit():
-        return str(uuid.UUID(int=int(s)))
-    else:
-        return s
 
 
 class ConfigError(Exception):
@@ -87,42 +74,6 @@ class OpenStackResource(resource.Resource):
             return super(OpenStackResource, self).__getattribute__(item)
 
 
-def str_map(param):
-    """Ensure that a dictionary contains only string values."""
-    if not param:
-        return {}
-
-    for k, v in six.iteritems(param):
-        if v is not None and (not isinstance(k, six.string_types) or
-                              not isinstance(v, six.string_types)):
-            raise Exception("Invalid config entry %s:%s (not strings)",
-                            k, v)
-
-    return param
-
-
-def payloads_config(param):
-    """Create a valid payloads config from the config file contents."""
-    if not param:
-        return {'enabled': True}
-
-    payloads_config = param.copy()
-    payloads_config['enabled'] = bool(param.get('enabled', True))
-
-    return payloads_config
-
-
-def _make_tags(ev):
-    """Build statsd metric tags from CADF event."""
-    return [
-        'project_id:{0}'.format(ev.target.project_id or
-                                ev.initiator.project_id or
-                                ev.initiator.domain_id),
-        'target_type_uri:{0}'.format(ev.target.typeURI),
-        'action:{0}'.format(ev.action),
-        'outcome:{0}'.format(ev.outcome)]
-
-
 class OpenStackAuditMiddleware(object):
     """The actual middleware implementation, a filter for the paste pipe."""
 
@@ -138,7 +89,7 @@ class OpenStackAuditMiddleware(object):
             self._payloads_enabled = payloads_enabled
             self._service_type = conf['service_type']
             self._service_name = conf.get('service_name', self._service_type)
-            self._service_id = self._build_service_id(self._service_name)
+            self._service_id = _build_service_id(self._service_name)
             self._prefix_re = re.compile(conf['prefix'])
             # default_target_endpoint_type = conf.get('target_endpoint_type')
             # self._service_endpoints = conf.get('service_endpoints', {})
@@ -396,7 +347,7 @@ class OpenStackAuditMiddleware(object):
                     if ev:
                         if pl:
                             # attach payload if requested
-                            self._attach_payload(ev, pl, res_spec)
+                            _attach_payload(ev, pl, res_spec)
                         events.append(ev)
 
             else:
@@ -417,13 +368,13 @@ class OpenStackAuditMiddleware(object):
 
                 # attach payload if requested
                 if self._payloads_enabled and res_spec.payloads['enabled'] \
-                   and request.content_length > 0 \
-                   and request.content_type == "application/json":
+                        and request.content_length > 0 \
+                        and request.content_type == "application/json":
                     req_pl = request.json
                     # remove possible wrapper elements
                     if isinstance(req_pl, dict):
                         req_pl = req_pl.get(res_spec.el_type_name, req_pl)
-                    self._attach_payload(event, req_pl, res_spec)
+                    _attach_payload(event, req_pl, res_spec)
 
                 events.append(event)
         else:
@@ -436,7 +387,7 @@ class OpenStackAuditMiddleware(object):
             if event and request.method[0] == 'P' \
                     and self._payloads_enabled \
                     and res_spec.payloads['enabled']:
-                self._attach_payload(event, request.json, res_spec)
+                _attach_payload(event, request.json, res_spec)
 
             events = [event]
 
@@ -451,7 +402,7 @@ class OpenStackAuditMiddleware(object):
                                    res_parent_id, request, response,
                                    subpayload, suffix=None):
         self._log.debug("create event from payload: %s",
-                        self._clean_payload(subpayload, res_spec))
+                        _clean_payload(subpayload, res_spec))
         ev = self._create_cadf_event(target_project, res_spec, res_id,
                                      res_parent_id, request,
                                      response, suffix)
@@ -538,42 +489,6 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    @staticmethod
-    def _clean_payload(payload, res_spec):
-        """Clean request payload of sensitive info."""
-        incl = res_spec.payloads.get('include')
-        excl = res_spec.payloads.get('exclude')
-        res_payload = {}
-        if excl and isinstance(payload, dict):
-            # make a copy so we do not change the original request
-            res_payload = payload.copy()
-            # remove possible wrapper elements
-            for k in excl:
-                if k in res_payload:
-                    del res_payload[k]
-        elif incl and isinstance(payload, dict):
-            for k in incl:
-                v = payload.get(k)
-                if v:
-                    res_payload[k] = v
-        else:
-            res_payload = payload
-
-        return res_payload
-
-    @staticmethod
-    def _attach_payload(event, payload, res_spec):
-        """Attach request payload to event."""
-        res_payload = OpenStackAuditMiddleware._clean_payload(
-            payload, res_spec)
-
-        attach_val = Attachment(typeURI="mime:application/json",
-                                content=json.dumps(res_payload,
-                                                   separators=(',', ':')),
-                                name='payload')
-
-        event.add_attachment(attach_val)
-
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
         """Build the event's target element from  the payload."""
@@ -632,8 +547,8 @@ class OpenStackAuditMiddleware(object):
             suffix: the last path component (already known)
         """
         if suffix is None:
-            return self._get_action_from_method(request.method, res_spec,
-                                                res_id), None
+            return _get_action_from_method(request.method, res_spec,
+                                           res_id), None
 
         if suffix == 'action':
             action = self._get_action_from_payload(request, res_spec, res_id)
@@ -641,23 +556,6 @@ class OpenStackAuditMiddleware(object):
 
         return self._get_action_and_key_from_path_suffix(
             suffix, request.method, res_spec, res_id)
-
-    @staticmethod
-    def _get_action_from_method(method, res_spec, res_id):
-        """Determine the CADF action from the HTTP method."""
-        if method == 'POST':
-            if res_id or res_spec.singleton:
-                return taxonomy.ACTION_UPDATE
-
-            return taxonomy.ACTION_CREATE
-        elif method == 'GET' or method == 'HEAD':
-            if res_id or res_spec.singleton:
-                return taxonomy.ACTION_READ
-            return taxonomy.ACTION_LIST
-        elif method == "PATCH":
-            return taxonomy.ACTION_UPDATE
-
-        return _method_action_map[method]
 
     def _get_action_and_key_from_path_suffix(self, path_suffix, method,
                                              res_spec, res_id):
@@ -679,7 +577,7 @@ class OpenStackAuditMiddleware(object):
                 return None, None
 
         # no action mapped to suffix => custom key
-        action = self._get_action_from_method(method, res_spec, res_id)
+        action = _get_action_from_method(method, res_spec, res_id)
         action += _key_action_suffix_map[action]
         return action, path_suffix
 
@@ -695,7 +593,7 @@ class OpenStackAuditMiddleware(object):
                     return action
 
                 # apply generic default mapping rule here
-                return self._get_action_from_method(
+                return _get_action_from_method(
                     request.method, res_spec, res_id) + '/' + rest_action
             else:
                 self._log.warning("/action URL without payload: %s",
@@ -705,13 +603,6 @@ class OpenStackAuditMiddleware(object):
             self._log.warning("unexpected empty action payload for path: %s",
                               request.path)
             return None
-
-    @staticmethod
-    def _build_service_id(name):
-        """Invent stable UUID for the service itself."""
-        md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
-        ns = uuid.UUID(md5_hash.hexdigest())
-        return str(uuid.uuid5(ns, socket.getfqdn()))
 
     def _handle_url_prefix(self, request):
         """Process the prefix from the URL path and remove it.
@@ -734,3 +625,5 @@ class OpenStackAuditMiddleware(object):
             return path, project
 
         return None, None
+
+

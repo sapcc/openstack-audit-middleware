@@ -13,7 +13,7 @@
 """Base functionality for all tests."""
 
 import auditmiddleware
-from auditmiddleware._api import _make_tags
+from auditmiddleware.parsing_utils import _make_tags
 from auditmiddleware.tests.unit import utils
 from mock import mock
 from oslo_config import fixture as cfg_fixture
