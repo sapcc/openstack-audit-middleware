@@ -7,6 +7,13 @@ import six
 from pycadf import cadftaxonomy as taxonomy
 from pycadf.attachment import Attachment
 
+_method_action_map = {'GET': taxonomy.ACTION_READ,
+                      'HEAD': taxonomy.ACTION_READ,
+                      'PUT': taxonomy.ACTION_UPDATE,
+                      'PATCH': taxonomy.ACTION_UPDATE, 'POST':
+                          taxonomy.ACTION_CREATE,
+                      'DELETE': taxonomy.ACTION_DELETE}
+
 
 def payloads_config(param):
     """Create a valid payloads config from the config file contents."""
@@ -51,14 +58,6 @@ def str_map(param):
     return param
 
 
-_method_action_map = {'GET': taxonomy.ACTION_READ,
-                      'HEAD': taxonomy.ACTION_READ,
-                      'PUT': taxonomy.ACTION_UPDATE,
-                      'PATCH': taxonomy.ACTION_UPDATE, 'POST':
-                          taxonomy.ACTION_CREATE,
-                      'DELETE': taxonomy.ACTION_DELETE}
-
-
 def _clean_payload(payload, res_spec):
     """Clean request payload of sensitive info."""
     incl = res_spec.payloads.get('include')
@@ -69,8 +68,7 @@ def _clean_payload(payload, res_spec):
         res_payload = payload.copy()
         # remove possible wrapper elements
         for k in excl:
-            if k in res_payload:
-                del res_payload[k]
+            res_payload.pop(k, None)
     elif incl and isinstance(payload, dict):
         for k in incl:
             v = payload.get(k)
@@ -118,3 +116,11 @@ def _get_action_from_method(method, res_spec, res_id):
         return taxonomy.ACTION_UPDATE
 
     return _method_action_map[method]
+
+
+def to_path_segments(path_string):
+    """Remove leading or trailing slashes and '.json' suffix and
+     split path into segments. """
+    path_string = path_string.rstrip("/").replace(".json", "")
+    path_segments = path_string.lstrip('/').split('/')
+    return path_segments

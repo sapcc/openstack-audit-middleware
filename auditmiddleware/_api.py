@@ -29,7 +29,7 @@ from pycadf import resource
 from pycadf.attachment import Attachment
 
 from auditmiddleware.parsing_utils import payloads_config, _make_tags, _make_uuid, str_map, _clean_payload, \
-    _attach_payload, _build_service_id, _get_action_from_method
+    _attach_payload, _build_service_id, _get_action_from_method, to_path_segments
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -44,6 +44,9 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_UPDATE: '/set',
                           taxonomy.ACTION_CREATE: '/put',
                           taxonomy.ACTION_DELETE: '/unset'}
+
+TargetResource = collections.namedtuple('TargetResource',
+                                        ['id', 'parent_id', 'spec'])
 
 # matcher for UUIDs
 _UUID_RE = re.compile("[0-9a-f-]+$")
@@ -198,13 +201,17 @@ class OpenStackAuditMiddleware(object):
             return None
 
         # normalize url: remove trailing slash and .json suffix
-        path = path[:-1] if path.endswith('/') else path
-        path = path[:-5] if path.endswith('.json') else path
-        return self._build_events(target_project, self._resource_specs,
-                                  None, None, request, response, path, 0)
+        path_segments = to_path_segments(path)
+        # reverse to pop first elements first
+        path_segments.reverse()
+        target_config, suffix = self._map_path_to_resource(self._resource_specs, None, None, request, path_segments)
+        return self._create_events(target_project, target_config.id, target_config.parent_id,
+                                   target_config.spec, request,
+                                   response, suffix)
 
-    def _build_events(self, target_project, res_spec, res_id, res_parent_id,
-                      request, response, path, cursor=0):
+    def _map_path_to_resource(
+            self, res_spec, res_id, res_parent_id,
+            request, segments):
         """Parse a request recursively and builds CADF events from it.
 
         This methods parses the URL path from left to right and builds the
@@ -213,88 +220,55 @@ class OpenStackAuditMiddleware(object):
         segment represents a resource name, an ID or an attribute name.
 
         Parameters:
-            target_project: target project ID if specified in the path
             res_spec: resource tree constructed from the mapping file
             res_id: ID of the target resource
-            parent_res_id: ID of the parent resource of the target resource
+            res_parent_id: ID of the parent resource of the target resource
             request: incoming request to parse
-            response: resulting response to parse (e.g. to obtain results,
-                      just created resource IDs)
-            path: URL path being parsed
-            cursor: current position in the path as it is parsed
+            segments: Remaining URL path segments from right to left
         """
-        # Check if the end of path is reached and event can be created finally
-        if cursor == -1:
+        # Check if the end of path is reached and return configuration for target
+        if not segments:
             # end of path reached, create the event
-            return self._create_events(target_project, res_id,
-                                       res_parent_id,
-                                       res_spec, request, response)
+            return TargetResource(res_id, res_parent_id, res_spec), None
 
-        # Find next path segment (skip leading / with +1)
-        next_pos = path.find('/', cursor + 1)
-        # token = scanned token (NOT keystone token)
-        token = None
-        if next_pos != -1:
-            # that means there are more path segments
-            token = path[cursor + 1:next_pos]
-        elif (cursor + 1) < len(path):
-            # last path segment found, not more '/' right of it
-            token = path[cursor + 1:]
+        token = segments.pop()
 
-        # handle the current token
         if isinstance(res_spec, dict):
-            # the resource tree node contains a dict => the token contains the
-            # top-level resource name
-            sub_res_spec = res_spec.get(token)
-            if sub_res_spec is None:
-                # create resource spec on demand using defaults
-                sub_res_spec = self.register_resource(None, token)
-                res_spec[token] = sub_res_spec
+            # the resource tree node contains a dict => the token contains the top-level resource name
+            # get sub_resource or create one for unexpected resource names
+            res_spec = res_spec.get(token, None) or self.register_resource(None, token, res_spec)
+            res_id, res_parent_id = None, None
+            return self._map_path_to_resource(res_spec, res_id, res_parent_id, request, segments)
 
-            return self._build_events(target_project, sub_res_spec, None, None,
-                                      request,
-                                      response,
-                                      path, next_pos)
         elif isinstance(res_spec, ResourceSpec):
             # if the ID is set or it is a singleton, then the next token will
             # be an action or child
-            if res_id or res_spec.singleton or token in res_spec.children:
-                child_res = res_spec.children.get(token)
-                if child_res:
-                    # the ID is still the one of the parent (or its parent if
-                    # the direct parent is a singleton)
-                    return self._build_events(target_project, child_res, None,
-                                              res_id or res_parent_id, request,
-                                              response, path, next_pos)
+            child_res_spec = res_spec.children.get(token, None)
+            if child_res_spec:
+                # the ID is still the one of the parent (or its parent if
+                # the direct parent is a singleton)
+                res_parent_id = res_id or res_parent_id
+                return self._map_path_to_resource(child_res_spec, None, res_parent_id, request, segments)
             elif _UUID_RE.match(token):
                 # next up should be an ID (unless it is a known action)
-                return self._build_events(target_project, res_spec, token,
-                                          res_parent_id, request, response,
-                                          path, next_pos)
+                res_id = token
+                return self._map_path_to_resource(res_spec, res_id, res_parent_id, request, segments)
 
-            if next_pos == -1:
-                # last path segment --> token must be an action or a key
-                return self._create_events(target_project, res_id,
-                                           res_parent_id, res_spec, request,
-                                           response, token)
-            else:
+            if segments:
                 # unknown resource name
                 # create resource spec on demand ...
-                res_spec.children[token] = self.register_resource(
-                    res_spec.el_type_uri,
-                    token)
-
-                # ... then repeat same call with res_spec now existing
-                return self._build_events(target_project, res_spec, res_id,
-                                          res_parent_id, request, response,
-                                          path, cursor)
+                child_res_spec = self.register_resource(res_spec.el_type_uri, token, res_spec.children)
+                return self._map_path_to_resource(child_res_spec, res_id, res_parent_id, request, segments)
+            else:
+                # last path segment --> token must be an action or a key
+                return TargetResource(res_id, res_parent_id, res_spec), token
 
         self._log.warning(
             "Unexpected continuation of resource path after segment %s: %s",
             token, request.path)
-        return None
+        return None, None
 
-    def register_resource(self, parent_type_uri, token):
+    def register_resource(self, parent_type_uri, token, parent_resource):
         """Register an unknown resource to avoid missed events.
 
         The resulting events are a bit raw but contain enough
@@ -303,14 +277,13 @@ class OpenStackAuditMiddleware(object):
         """
         self._log.warning("unknown resource: %s (created on demand)",
                           token)
-        res_name = token.replace('_', '-')
-        if res_name.startswith('os-'):
-            res_name = res_name[3:]
-        res_name = 'X' + res_name
+        trimmed_res_name = token.replace('_', '-').replace('os-', '')
+        trimmed_res_name = 'X' + trimmed_res_name
         res_dict = {'api_name': token}
-        sub_res_spec, _ = self._build_res_spec(res_name,
+        sub_res_spec, _ = self._build_res_spec(trimmed_res_name,
                                                parent_type_uri,
                                                res_dict)
+        parent_resource[token] = sub_res_spec
 
         return sub_res_spec
 
@@ -614,16 +587,7 @@ class OpenStackAuditMiddleware(object):
         g = self._prefix_re.match(request.path)
         if g:
             path = request.path[g.end():]
-            project = None
-            try:
-                # project needs to be specified in a named group in order to
-                #  be detected
-                project = g.group('project_id')
-            except IndexError:
-                project = None
-
+            project = g.groupdict().get('project_id', '')
             return path, project
-
         return None, None
-
 
