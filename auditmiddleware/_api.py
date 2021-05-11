@@ -208,9 +208,10 @@ class OpenStackAuditMiddleware(object):
 
         action, key = self._get_action_and_key(target_config, request, suffix)
         if not action:
-            self._log.info("ignoring request with path: %s; because action was suppressed by config or not found",
-                           request.path)
+            self._log.info("ignoring request with path: %s; "
+                           "because action was suppressed by config or not found", request.path)
             return []
+
         return self._create_events(target_project, target_config.id, target_config.parent_id,
                                    target_config.spec, request,
                                    response, action, key)
@@ -388,9 +389,9 @@ class OpenStackAuditMiddleware(object):
         if not ev:
             return None
 
-        ev.target = self._create_target_resource(target_project, res_spec,
-                                                 res_id, res_parent_id,
-                                                 subpayload)
+        ev.target = self._build_target(target_project, res_spec,
+                                       res_id, res_parent_id,
+                                       subpayload)
 
         # extract custom attributes from the payload
         for attr, typeURI in six.iteritems(res_spec.custom_attributes):
@@ -407,20 +408,9 @@ class OpenStackAuditMiddleware(object):
     def _create_cadf_event(self, project, res_spec, res_id, res_parent_id,
                            request, response, action, key):
 
-        project_id = request.environ.get('HTTP_X_PROJECT_ID')
-        domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
-        initiator = OpenStackResource(
-            project_id=project_id, domain_id=domain_id,
-            typeURI=taxonomy.ACCOUNT_USER,
-            id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
-            name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
-            domain=request.environ.get('HTTP_X_USER_DOMAIN_NAME',
-                                       taxonomy.UNKNOWN),
-            host=host.Host(address=request.client_addr,
-                           agent=request.user_agent))
+        initiator = self._build_initiator(request)
+        observer = self._build_observer()
 
-        action_result = None
-        event_reason = None
         if response:
             if 200 <= response.status_int < 400:
                 action_result = taxonomy.OUTCOME_SUCCESS
@@ -431,18 +421,16 @@ class OpenStackAuditMiddleware(object):
                 reasonType='HTTP', reasonCode=str(response.status_int))
         else:
             action_result = taxonomy.UNKNOWN
+            event_reason = None
 
-        target = None
         if res_id or res_parent_id:
-            target = self._create_target_resource(project, res_spec, res_id,
-                                                  res_parent_id, key=key)
+            target = self._build_target(project, res_spec, res_id,
+                                        res_parent_id, key=key)
         else:
-            target = self._create_target_resource(project, res_spec,
-                                                  None, self._service_id,
-                                                  key=key)
+            target = self._build_target(project, res_spec,
+                                        None, self._service_id,
+                                        key=key)
             target.name = self._service_name
-
-        observer = self._create_observer_resource()
 
         event = eventfactory.EventFactory().new_event(
             eventType=cadftype.EVENTTYPE_ACTIVITY,
@@ -463,8 +451,20 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    def _create_target_resource(self, target_project, res_spec, res_id,
-                                res_parent_id=None, payload=None, key=None):
+    def _build_initiator(self, request):
+        return OpenStackResource(
+            project_id=request.environ.get('HTTP_X_PROJECT_ID', taxonomy.UNKNOWN),
+            domain_id=request.environ.get('HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN),
+            typeURI=taxonomy.ACCOUNT_USER,
+            id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
+            name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
+            domain=request.environ.get('HTTP_X_USER_DOMAIN_NAME',
+                                       taxonomy.UNKNOWN),
+            host=host.Host(address=request.client_addr,
+                           agent=request.user_agent))
+
+    def _build_target(self, target_project, res_spec, res_id,
+                      res_parent_id=None, payload=None, key=None):
         """Build the event's target element from  the payload."""
         project_id = target_project
         rid = res_id
@@ -500,7 +500,7 @@ class OpenStackAuditMiddleware(object):
 
         return target
 
-    def _create_observer_resource(self):
+    def _build_observer(self):
         """Build the observer element representing this middleware."""
         observer = resource.Resource(typeURI='service/' + self._service_type,
                                      id=self._service_id,
