@@ -26,7 +26,7 @@ def payloads_config(param):
     return payloads_config
 
 
-def _make_tags(ev):
+def make_tags(ev):
     """Build statsd metric tags from CADF event."""
     return [
         'project_id:{0}'.format(ev.target.project_id or
@@ -146,7 +146,7 @@ def find_bulk_targets(response_payload, res_spec):
 
 def attach_payload(event, payload, res_spec):
     """Attach request payload to event."""
-    res_payload = clean_payload(
+    res_payload = _clean_payload(
         payload, res_spec)
     if res_payload:
         attach_val = Attachment(typeURI="mime:application/json",
@@ -156,32 +156,11 @@ def attach_payload(event, payload, res_spec):
         event.add_attachment(attach_val)
 
 
-def clean_payload(payload, res_spec):
-    """Clean request payload of sensitive info."""
-    incl = res_spec.payloads.get('include')
-    excl = res_spec.payloads.get('exclude')
-    res_payload = {}
-    if excl and isinstance(payload, dict):
-        # make a copy so we do not change the original request
-        res_payload = payload.copy()
-        # remove possible wrapper elements
-        for k in excl:
-            res_payload.pop(k, None)
-    elif incl and isinstance(payload, dict):
-        for k in incl:
-            v = payload.get(k)
-            if v:
-                res_payload[k] = v
-    else:
-        res_payload = payload
-
-    return res_payload
-
 
 def clean_or_unwrap(attachable_request_body, bulk_operation_payloads,
                     relevant_response_json, target_config):
     if bulk_operation_payloads:
-        response_payloads = [clean_payload(payload, target_config.spec)
+        response_payloads = [_clean_payload(payload, target_config.spec)
                              for payload in bulk_operation_payloads]
         request_payloads = iter(attachable_request_body.get(target_config.spec.type_name, []))
 

@@ -13,7 +13,7 @@
 """Base functionality for all tests."""
 
 import auditmiddleware
-from auditmiddleware.parsing_utils import _make_tags
+from auditmiddleware.parsing_utils import make_tags
 from auditmiddleware.tests.unit import utils
 from mock import mock
 from oslo_config import fixture as cfg_fixture
@@ -206,7 +206,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         if metrics_enabled:
             for e in events:
                 self.assert_statsd_counter('events', 1,
-                                           tags=_make_tags(e))
+                                           tags=make_tags(e))
             # will not check for operational metrics
         else:
             self.statsd_report_mock.assert_not_called()

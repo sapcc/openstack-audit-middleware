@@ -27,7 +27,7 @@ from pycadf import reason
 from pycadf import resource
 from pycadf.attachment import Attachment
 
-import auditmiddleware.parsing_utils as utils
+from . import parsing_utils as utils
 
 ResourceSpec = collections.namedtuple('ResourceSpec',
                                       ['type_name', 'el_type_name',
@@ -131,8 +131,7 @@ class OpenStackAuditMiddleware(object):
         result = {}
 
         for name, s in six.iteritems(res_dict):
-            res_spec, rest_name = self._build_res_spec(name, parent_type_uri,
-                                                       s)
+            res_spec, rest_name = self._build_res_spec(name, parent_type_uri, s)
 
             # ensure that cust
             result[rest_name] = res_spec
@@ -166,9 +165,7 @@ class OpenStackAuditMiddleware(object):
             if type_name.startswith('os_'):
                 type_name = type_name[3:]
         type_uri = spec.get('type_uri', pfx + "/" + name)
-        el_type_name = None
-        el_type_uri = None
-        childs_parent_type_uri = None
+
         if not singleton:
             # derive the name of the individual resource instances (elements)
             # by omitting the last character of the resource name
@@ -176,6 +173,8 @@ class OpenStackAuditMiddleware(object):
             el_type_uri = type_uri[:-1]
             childs_parent_type_uri = el_type_uri
         else:
+            el_type_name = None
+            el_type_uri = None
             childs_parent_type_uri = type_uri
         res_spec = ResourceSpec(type_name, el_type_name,
                                 type_uri, el_type_uri, singleton,
@@ -223,7 +222,6 @@ class OpenStackAuditMiddleware(object):
 
         events = [self._create_cadf_event(request, response, action, target) for target in targets]
 
-
         for event, payload in zip(events, response_payloads):
             utils.attach_custom_attributes(event, target_config.spec, payload)
 
@@ -233,7 +231,7 @@ class OpenStackAuditMiddleware(object):
         for event in events:
             if self._statsd:
                 self._statsd.increment('events',
-                                       tags=utils._make_tags(event))
+                                       tags=utils.make_tags(event))
         return events
 
     def _map_path_to_resource(
@@ -241,8 +239,8 @@ class OpenStackAuditMiddleware(object):
             request, segments):
         """Parse a request recursively and builds CADF events from it.
 
-        This methods parses the URL path from left to right and builds the
-        resource hierarchy from it. The res_spec resource tree is used to
+        This methods parses the URL path from left to right and maps it
+        to the configured resource hierarchy. The res_spec resource tree is used to
         interpret the path segments properly, e.g. known when a path
         segment represents a resource name, an ID or an attribute name.
 
@@ -251,7 +249,7 @@ class OpenStackAuditMiddleware(object):
             res_id: ID of the target resource
             res_parent_id: ID of the parent resource of the target resource
             request: incoming request to parse
-            segments: Remaining URL path segments from right to left
+            segments: Remaining URL path segments from left to right (reversed to pop() in order)
         """
         # Check if the end of path is reached and return configuration for target
         if not segments:
@@ -350,7 +348,8 @@ class OpenStackAuditMiddleware(object):
 
         return event
 
-    def _build_initiator(self, request):
+    @staticmethod
+    def _build_initiator(request):
         return OpenStackResource(
             project_id=request.environ.get('HTTP_X_PROJECT_ID', taxonomy.UNKNOWN),
             domain_id=request.environ.get('HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN),
@@ -454,20 +453,21 @@ class OpenStackAuditMiddleware(object):
             suffix, request.method, target_config.spec,
             target_config.id)
 
-    def _get_action_and_key_from_path_suffix(self, path_suffix, method,
+    @staticmethod
+    def _get_action_and_key_from_path_suffix(path_suffix, method,
                                              res_spec, res_id):
         """Determine the CADF action from the URL path."""
         rest_action = path_suffix
         # check for individual mapping of action
-        action = res_spec.custom_actions.get(rest_action)
-        if action is not None:
+        action = res_spec.custom_actions.get(rest_action, None)
+        if action:
             return action, None
 
         # check for generic mapping
         rule = method + ':*'
         if rule in res_spec.custom_actions:
             action = res_spec.custom_actions.get(rule)
-            if action is not None:
+            if action:
                 return action.replace('*', rest_action), None
             else:
                 # action suppressed by intention
@@ -480,24 +480,19 @@ class OpenStackAuditMiddleware(object):
 
     def _get_action_from_payload(self, request, res_spec, res_id):
         """Determine the CADF action from the payload."""
-        try:
-            payload = request.json
-            if payload:
-                rest_action = next(iter(payload))
-                # check for individual mapping of action
-                action = res_spec.custom_actions.get(rest_action)
-                if action is not None:
-                    return action
+        payload = utils.get_json_if(True, request)
+        if payload:
+            rest_action = next(iter(payload))
+            # check for individual mapping of action
+            action = res_spec.custom_actions.get(rest_action, None)
+            if action:
+                return action
 
-                # apply generic default mapping rule here
-                return utils.get_action_from_method(
-                    request.method, res_spec, res_id) + '/' + rest_action
-            else:
-                self._log.warning("/action URL without payload: %s",
-                                  request.path)
-                return None
-        except ValueError:
-            self._log.warning("unexpected empty action payload for path: %s",
+            # apply generic default mapping rule here
+            return utils.get_action_from_method(
+                request.method, res_spec, res_id) + '/' + rest_action
+        else:
+            self._log.warning("/action URL without payload: %s",
                               request.path)
             return None
 
