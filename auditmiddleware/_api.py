@@ -41,6 +41,7 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
 _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_UPDATE: '/set',
                           taxonomy.ACTION_CREATE: '/put',
+                          taxonomy.ACTION_LIST: '/read/list',
                           taxonomy.ACTION_DELETE: '/unset'}
 
 TargetResource = collections.namedtuple('TargetResource',
