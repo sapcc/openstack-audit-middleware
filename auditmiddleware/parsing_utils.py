@@ -80,20 +80,6 @@ def _clean_payload(payload, res_spec):
     return res_payload
 
 
-def _attach_payload(event, payload, res_spec):
-    """Attach request payload to event."""
-    res_payload = _clean_payload(
-        payload, res_spec)
-
-    if res_payload:
-        attach_val = Attachment(typeURI="mime:application/json",
-                                content=json.dumps(res_payload,
-                                                   separators=(',', ':')),
-                                name='payload')
-
-        event.add_attachment(attach_val)
-
-
 def _build_service_id(name):
     """Invent stable UUID for the service itself."""
     md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
@@ -154,7 +140,6 @@ def attach_payload(event, payload, res_spec):
                                                    separators=(',', ':')),
                                 name='payload')
         event.add_attachment(attach_val)
-
 
 
 def clean_or_unwrap(attachable_request_body, bulk_operation_payloads,
