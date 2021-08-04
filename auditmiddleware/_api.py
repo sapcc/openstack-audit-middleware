@@ -44,6 +44,13 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
                           taxonomy.ACTION_LIST: '/read/list',
                           taxonomy.ACTION_DELETE: '/unset'}
 
+_method_action_map = {'GET': taxonomy.ACTION_READ,
+                      'HEAD': taxonomy.ACTION_READ,
+                      'PUT': taxonomy.ACTION_UPDATE,
+                      'PATCH': taxonomy.ACTION_UPDATE,
+                      'POST': taxonomy.ACTION_CREATE,
+                      'DELETE': taxonomy.ACTION_DELETE}
+
 TargetResource = collections.namedtuple('TargetResource',
                                         ['id', 'parent_id', 'spec'])
 
@@ -196,7 +203,7 @@ class OpenStackAuditMiddleware(object):
         if not path:
             self._log.info("ignoring request with path: %s",
                            request.path)
-            return None
+            return []
 
         # normalize url: remove trailing slash and .json suffix
         path_segments = utils.to_path_segments(path)
@@ -442,8 +449,8 @@ class OpenStackAuditMiddleware(object):
             suffix: the last path component (already known)
         """
         if suffix is None:
-            return utils.get_action_from_method(request.method, target_config.spec,
-                                                target_config.id), None
+            return get_action_from_method(request.method, target_config.spec,
+                                          target_config.id), None
 
         if suffix == 'action':
             action = self._get_action_from_payload(request, target_config.spec,
@@ -475,7 +482,7 @@ class OpenStackAuditMiddleware(object):
                 return None, None
 
         # no action mapped to suffix => custom key
-        action = utils.get_action_from_method(method, res_spec, res_id)
+        action = get_action_from_method(method, res_spec, res_id)
         action += _key_action_suffix_map[action]
         return action, path_suffix
 
@@ -490,7 +497,7 @@ class OpenStackAuditMiddleware(object):
                 return action
 
             # apply generic default mapping rule here
-            return utils.get_action_from_method(
+            return get_action_from_method(
                 request.method, res_spec, res_id) + '/' + rest_action
         else:
             self._log.warning("/action URL without payload: %s",
@@ -510,3 +517,20 @@ class OpenStackAuditMiddleware(object):
             project = g.groupdict().get('project_id', '')
             return path, project
         return None, None
+
+
+def get_action_from_method(method, res_spec, res_id):
+    """Determine the CADF action from the HTTP method."""
+    if method == 'POST':
+        if res_id or res_spec.singleton:
+            return taxonomy.ACTION_UPDATE
+
+        return taxonomy.ACTION_CREATE
+    elif method == 'GET' or method == 'HEAD':
+        if res_id or res_spec.singleton:
+            return taxonomy.ACTION_READ
+        return taxonomy.ACTION_LIST
+    elif method == "PATCH":
+        return taxonomy.ACTION_UPDATE
+
+    return _method_action_map[method]

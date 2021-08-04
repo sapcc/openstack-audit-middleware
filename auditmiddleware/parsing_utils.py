@@ -4,15 +4,7 @@ import socket
 import uuid
 
 import six
-from pycadf import cadftaxonomy as taxonomy
 from pycadf.attachment import Attachment
-
-_method_action_map = {'GET': taxonomy.ACTION_READ,
-                      'HEAD': taxonomy.ACTION_READ,
-                      'PUT': taxonomy.ACTION_UPDATE,
-                      'PATCH': taxonomy.ACTION_UPDATE,
-                      'POST': taxonomy.ACTION_CREATE,
-                      'DELETE': taxonomy.ACTION_DELETE}
 
 
 def payloads_config(param):
@@ -85,23 +77,6 @@ def _build_service_id(name):
     md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
     ns = uuid.UUID(md5_hash.hexdigest())
     return str(uuid.uuid5(ns, socket.getfqdn()))
-
-
-def get_action_from_method(method, res_spec, res_id):
-    """Determine the CADF action from the HTTP method."""
-    if method == 'POST':
-        if res_id or res_spec.singleton:
-            return taxonomy.ACTION_UPDATE
-
-        return taxonomy.ACTION_CREATE
-    elif method == 'GET' or method == 'HEAD':
-        if res_id or res_spec.singleton:
-            return taxonomy.ACTION_READ
-        return taxonomy.ACTION_LIST
-    elif method == "PATCH":
-        return taxonomy.ACTION_UPDATE
-
-    return _method_action_map[method]
 
 
 def to_path_segments(path_string):
