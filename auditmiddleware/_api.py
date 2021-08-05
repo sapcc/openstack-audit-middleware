@@ -98,7 +98,7 @@ class OpenStackAuditMiddleware(object):
             self._payloads_enabled = payloads_enabled
             self._service_type = conf['service_type']
             self._service_name = conf.get('service_name', self._service_type)
-            self._service_id = utils._build_service_id(self._service_name)
+            self._service_id = utils.build_service_id(self._service_name)
             self._prefix_re = re.compile(conf['prefix'])
             # default_target_endpoint_type = conf.get('target_endpoint_type')
             # self._service_endpoints = conf.get('service_endpoints', {})
@@ -139,7 +139,9 @@ class OpenStackAuditMiddleware(object):
         result = {}
 
         for name, s in six.iteritems(res_dict):
-            res_spec, rest_name = self._build_res_spec(name, parent_type_uri, s)
+            res_spec, rest_name = self._build_res_spec(name,
+                                                       parent_type_uri,
+                                                       s)
 
             # ensure that cust
             result[rest_name] = res_spec
@@ -209,26 +211,38 @@ class OpenStackAuditMiddleware(object):
         path_segments = utils.to_path_segments(path)
         # reverse to pop first elements first
         path_segments.reverse()
-        target_config, suffix = self._map_path_to_resource(self._resource_specs, None, None, request, path_segments)
+        target_config, suffix = \
+            self._map_path_to_resource(self._resource_specs, None, None,
+                                       request, path_segments)
 
         action, key = self._get_action_and_key(target_config, request, suffix)
         if not action:
-            self._log.info("ignoring request with path: %s; "
-                           "because action was suppressed by config or not found", request.path)
+            self._log.info("ignoring request with path: %s; because action "
+                           "was suppressed by config or not found",
+                           request.path)
             return []
 
-        payloads_enabled = self._payloads_enabled and target_config.spec.payloads['enabled']
-        relevant_response_json = utils.get_json_if(request.method[0] == 'P', response)
-        bulk_operation_payloads = utils.find_bulk_targets(relevant_response_json, target_config.spec)
-        attachable_request_body = utils.get_json_if(request.method[0] == 'P' and payloads_enabled, request)
+        payloads_enabled = self._payloads_enabled \
+            and target_config.spec.payloads['enabled']
+        relevant_resp_json = utils.get_json_if(request.method[0] == 'P',
+                                               response)
+        bulk_operation_payloads = utils.find_bulk_targets(relevant_resp_json,
+                                                          target_config.spec)
+        attachable_request_body = utils.get_json_if(request.method[0] == 'P'
+                                                    and payloads_enabled,
+                                                    request)
 
         request_payloads, response_payloads = \
-            utils.clean_or_unwrap(attachable_request_body, bulk_operation_payloads,
-                                  relevant_response_json, target_config)
+            utils.clean_or_unwrap(attachable_request_body,
+                                  bulk_operation_payloads,
+                                  relevant_resp_json,
+                                  target_config)
 
-        targets = self._build_targets(key, response_payloads, target_config, target_project)
+        targets = self._build_targets(key, response_payloads,
+                                      target_config, target_project)
 
-        events = [self._create_cadf_event(request, response, action, target) for target in targets]
+        events = [self._create_cadf_event(request, response, action, target)
+                  for target in targets]
 
         for event, payload in zip(events, response_payloads):
             utils.attach_custom_attributes(event, target_config.spec, payload)
@@ -248,18 +262,21 @@ class OpenStackAuditMiddleware(object):
         """Parse a request recursively and builds CADF events from it.
 
         This methods parses the URL path from left to right and maps it
-        to the configured resource hierarchy. The res_spec resource tree is used to
-        interpret the path segments properly, e.g. known when a path
-        segment represents a resource name, an ID or an attribute name.
+        to the configured resource hierarchy. The res_spec resource tree
+        is used to interpret the path segments properly,
+        e.g. known when a path segment represents a resource name,
+        an ID or an attribute name.
 
         Parameters:
             res_spec: resource tree constructed from the mapping file
             res_id: ID of the target resource
             res_parent_id: ID of the parent resource of the target resource
             request: incoming request to parse
-            segments: Remaining URL path segments from left to right (reversed to pop() in order)
+            segments: Remaining URL path segments from left to right
+            (reversed to pop() in order)
         """
-        # Check if the end of path is reached and return configuration for target
+        # Check if the end of path is reached
+        # and return configuration for target
         if not segments:
             # end of path reached, create the event
             return TargetResource(res_id, res_parent_id, res_spec), None
@@ -267,11 +284,14 @@ class OpenStackAuditMiddleware(object):
         token = segments.pop()
 
         if isinstance(res_spec, dict):
-            # the resource tree node contains a dict => the token contains the top-level resource name
+            # the resource tree node contains a dict
+            # => the token contains the top-level resource name
             # get sub_resource or create one for unexpected resource names
-            res_spec = res_spec.get(token, None) or self.register_resource(None, token, res_spec)
+            res_spec = res_spec.get(token, None) \
+                       or self.register_resource(None, token, res_spec)
             res_id, res_parent_id = None, None
-            return self._map_path_to_resource(res_spec, res_id, res_parent_id, request, segments)
+            return self._map_path_to_resource(res_spec, res_id, res_parent_id,
+                                              request, segments)
 
         elif isinstance(res_spec, ResourceSpec):
             # if the ID is set or it is a singleton, then the next token will
@@ -281,17 +301,25 @@ class OpenStackAuditMiddleware(object):
                 # the ID is still the one of the parent (or its parent if
                 # the direct parent is a singleton)
                 res_parent_id = res_id or res_parent_id
-                return self._map_path_to_resource(child_res_spec, None, res_parent_id, request, segments)
+                return self._map_path_to_resource(child_res_spec, None,
+                                                  res_parent_id, request,
+                                                  segments)
             elif _UUID_RE.match(token):
                 # next up should be an ID (unless it is a known action)
                 res_id = token
-                return self._map_path_to_resource(res_spec, res_id, res_parent_id, request, segments)
+                return self._map_path_to_resource(res_spec, res_id,
+                                                  res_parent_id, request,
+                                                  segments)
 
             if segments:
                 # unknown resource name
                 # create resource spec on demand ...
-                child_res_spec = self.register_resource(res_spec.el_type_uri, token, res_spec.children)
-                return self._map_path_to_resource(child_res_spec, res_id, res_parent_id, request, segments)
+                child_res_spec = self.register_resource(res_spec.el_type_uri,
+                                                        token,
+                                                        res_spec.children)
+                return self._map_path_to_resource(child_res_spec, res_id,
+                                                  res_parent_id, request,
+                                                  segments)
             else:
                 # last path segment --> token must be an action or a key
                 return TargetResource(res_id, res_parent_id, res_spec), token
@@ -359,8 +387,10 @@ class OpenStackAuditMiddleware(object):
     @staticmethod
     def _build_initiator(request):
         return OpenStackResource(
-            project_id=request.environ.get('HTTP_X_PROJECT_ID', taxonomy.UNKNOWN),
-            domain_id=request.environ.get('HTTP_X_DOMAIN_ID', taxonomy.UNKNOWN),
+            project_id=request.environ.get('HTTP_X_PROJECT_ID',
+                                           taxonomy.UNKNOWN),
+            domain_id=request.environ.get('HTTP_X_DOMAIN_ID',
+                                          taxonomy.UNKNOWN),
             typeURI=taxonomy.ACCOUNT_USER,
             id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
@@ -369,10 +399,17 @@ class OpenStackAuditMiddleware(object):
             host=host.Host(address=request.client_addr,
                            agent=request.user_agent))
 
-    def _build_targets(self, key, response_payloads, target_config, target_project):
-        return [self._build_target_from_payload(target_project, target_config, payload, key)
-                for payload in response_payloads] or \
-               [self._build_default_target(key, target_project, target_config)]
+    def _build_targets(self, key,
+                       response_payloads, target_config, target_project):
+        payload_targets = [self._build_target_from_payload( target_project,
+                                                            target_config,
+                                                            payload, key)
+                           for payload in response_payloads]
+        if not payload_targets:
+            return [self._build_default_target(key,
+                                               target_project,
+                                               target_config)]
+        return payload_targets
 
     def _build_default_target(self, key, project, target_config):
         if target_config.id or target_config.parent_id:
@@ -380,7 +417,10 @@ class OpenStackAuditMiddleware(object):
         else:
             name = self._service_name
 
-        rid = utils.make_uuid(target_config.id or target_config.parent_id or self._service_id)
+        rid = utils.make_uuid(
+            target_config.id
+            or target_config.parent_id
+            or self._service_id)
         type_uri = target_config.spec.el_type_uri \
             if target_config.id else target_config.spec.type_uri
         target = OpenStackResource(project_id=project, id=rid,
@@ -393,7 +433,7 @@ class OpenStackAuditMiddleware(object):
 
         return target
 
-    def _build_target_from_payload(self, target_project, target_config: TargetResource,
+    def _build_target_from_payload(self, target_project, target_config,
                                    payload=None, key=None):
         """Build the event's target element from  the payload."""
         project_id = target_project

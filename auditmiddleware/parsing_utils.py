@@ -12,8 +12,8 @@ def payloads_config(param):
     if not param:
         return {'enabled': True}
 
-    payloads_config = param.copy()
-    payloads_config['enabled'] = bool(param.get('enabled', True))
+    paylds_config = param.copy()
+    paylds_config['enabled'] = bool(param.get('enabled', True))
 
     return payloads_config
 
@@ -30,6 +30,7 @@ def make_tags(ev):
 
 
 def make_uuid(s):
+    """Produce a uuid from digit inputs, return other input unmodified"""
     if s.isdigit():
         return str(uuid.UUID(int=int(s)))
     else:
@@ -72,7 +73,7 @@ def _clean_payload(payload, res_spec):
     return res_payload
 
 
-def _build_service_id(name):
+def build_service_id(name):
     """Invent stable UUID for the service itself."""
     md5_hash = hashlib.md5(name.encode('utf-8'))  # nosec
     ns = uuid.UUID(md5_hash.hexdigest())
@@ -87,17 +88,23 @@ def to_path_segments(path_string):
     return path_segments
 
 
-def get_json_if(condition, response):
+def get_json_if(condition, req_or_resp):
+    """
+    If condition is true, return the json body of the second argument
+    or an empty dict if there is none.
+    """
     useful_payload = {}
     if condition \
-            and response \
-            and response.content_length > 0 \
-            and response.content_type == "application/json":
-        useful_payload = response.json
+            and req_or_resp \
+            and req_or_resp.content_length > 0 \
+            and req_or_resp.content_type == "application/json":
+        useful_payload = req_or_resp.json
     return useful_payload
 
 
 def find_bulk_targets(response_payload, res_spec):
+    """Check if a given payload contains targets of a bulk request.
+     If so, return them"""
     if not response_payload or res_spec.singleton:
         return []
     resource = response_payload.get(res_spec.type_name, [])
@@ -119,16 +126,19 @@ def attach_payload(event, payload, res_spec):
 
 def clean_or_unwrap(attachable_request_body, bulk_operation_payloads,
                     relevant_response_json, target_config):
+    """Remove wrapping elements from payload
+    or filter payload based on configuration"""
     if bulk_operation_payloads:
         response_payloads = [_clean_payload(payload, target_config.spec)
                              for payload in bulk_operation_payloads]
-        request_payloads = iter(attachable_request_body.get(target_config.spec.type_name, []))
+        request_payloads = \
+            iter(attachable_request_body.get(target_config.spec.type_name, []))
 
     elif relevant_response_json:
-        response_payloads = [relevant_response_json.get(target_config.spec.el_type_name,
-                                                        relevant_response_json)]
-        request_payloads = [attachable_request_body.get(target_config.spec.el_type_name,
-                                                        attachable_request_body)]
+        response_payloads = [relevant_response_json.get(
+            target_config.spec.el_type_name, relevant_response_json)]
+        request_payloads = [attachable_request_body.get(
+            target_config.spec.el_type_name, attachable_request_body)]
 
     else:
         response_payloads = []
@@ -137,6 +147,7 @@ def clean_or_unwrap(attachable_request_body, bulk_operation_payloads,
 
 
 def attach_custom_attributes(ev, spec, subpayload):
+    """Add given payload to given event as Attachment"""
     for attr, typeURI in six.iteritems(spec.custom_attributes):
         value = subpayload.get(attr)
         if value:
