@@ -18,11 +18,13 @@ resources:
             type_uri: network/bgpvpn/router-associations
           port_associations:
             type_uri: network/bgpvpn/port-associations
+  interconnection:
+    singleton: true
+    children:
+      interconnections:
+        type_uri: network/interconnections
   flavors:
   floatingips:
-    children:
-      tags:
-        singleton: true
   fw:
     # FWaaS 1.0 namespace
     singleton: true
@@ -47,6 +49,7 @@ resources:
         el_type_uri: network/firewall/policy
       firewall_rules:
         type_uri: network/firewall/rules
+
   lbaas:
     # LBaaS 2.0 namespace
     singleton: true
@@ -85,16 +88,10 @@ resources:
       metering-label-rules:
         type_uri: network/metering/label-rules
   networks:
-    children:
-      tags:
-        singleton: true
   network-ip-availabilities:
   ports:
     custom_attributes:
       security_groups: network/security-groups
-    children:
-      tags:
-        singleton: true
   quotas:
     custom_actions:
       details: read/list/details
@@ -116,17 +113,7 @@ resources:
     custom_actions:
       add_router_interface: update/add/router-interface
       remove_router_interface: update/remove/router-interface
-    custom_attributes:
-      subnet_id: network/subnet
-      port_id: network/port
-      network_id: network/network
-    children:
-      tags:
-        singleton: true
   security-groups:
-    children:
-      tags:
-        singleton: true
   security-group-rules:
     # does not have a name field, so let's use the description
     custom_name: description
@@ -135,17 +122,8 @@ resources:
   segments:
   service-profiles:
   subnetpools:
-    children:
-      tags:
-        singleton: true
   subnets:
-    children:
-      tags:
-        singleton: true
   trunks:
-    children:
-      tags:
-        singleton: true
   vpn:
     # VPNaaS 2.0 namespace
     singleton: true

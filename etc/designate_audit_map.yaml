@@ -7,10 +7,9 @@ resources:
   zones:
     children:
       recordsets:
-
-  pools:
   tlds:
   tsigkeys:
   blacklists:
   quotas:
+  # this path is reverse/floatingips, needs mapping adjustment
   floatingips:
