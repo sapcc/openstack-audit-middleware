@@ -26,7 +26,6 @@ from oslo_log import log as logging
 from pycadf.attachment import Attachment
 from pycadf import cadftaxonomy as taxonomy
 from pycadf import cadftype
-from pycadf import credential
 from pycadf import eventfactory
 from pycadf import host
 from pycadf import reason
@@ -86,13 +85,6 @@ class OpenStackResource(resource.Resource):
             return None
         else:
             return super(OpenStackResource, self).__getattribute__(item)
-
-
-class OpenStackCredential(credential.Credential):
-    def __init__(self, identity_status=None, **kwargs):
-        super(OpenStackCredential, self).__init__(**kwargs)
-        if identity_status is not None:
-            self.identity_status = identity_status
 
 
 def str_map(param):
@@ -502,11 +494,7 @@ class OpenStackAuditMiddleware(object):
             domain=request.environ.get('HTTP_X_USER_DOMAIN_NAME',
                                        taxonomy.UNKNOWN),
             host=host.Host(address=request.client_addr,
-                           agent=request.user_agent),
-            credential=OpenStackCredential(
-                token=request.environ.get('HTTP_X_AUTH_TOKEN', ''),
-                identity_status=request.environ.get('HTTP_X_IDENTITY_STATUS',
-                                                taxonomy.UNKNOWN)))
+                           agent=request.user_agent))
 
         action_result = None
         event_reason = None
