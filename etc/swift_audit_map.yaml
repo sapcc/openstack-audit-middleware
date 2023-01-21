@@ -1,4 +1,4 @@
-service_type: 'data/storage/object'
+service_type: 'storage/object'
 service_name: 'swift'
 
 prefix: '/v1'
