@@ -1,0 +1,22 @@
+service_type: 'data/storage/object'
+service_name: 'swift'
+
+prefix: '/v1'
+
+resources:
+  accounts:
+    custom_id: account
+    children:
+      containers:
+        custom_id: container
+        children:
+          objects:
+            custom_id: object
+            payloads:
+              exclude:
+                - etag
+                - delete_at
+                - delete_after
+            custom_actions:
+              # model details listing a action
+              details: read/list/details
