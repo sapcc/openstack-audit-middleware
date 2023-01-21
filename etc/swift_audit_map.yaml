@@ -8,10 +8,11 @@ resources:
     custom_id: account
     children:
       containers:
-        custom_id: container
+        custom_id: container_name
         children:
+          # Objects can have / in the name, but are not additional sub hirearchy. Need to determine how to map that.
           objects:
-            custom_id: object
+            custom_id: object_name
             payloads:
               exclude:
                 - etag
