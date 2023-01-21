@@ -1,6 +1,7 @@
 service_type: 'storage/object'
 service_name: 'swift'
 
+# The prefix is v1, but prefix: '/v1/AUTH_[0-9a-z-]*' is intriguing because of the weird resource beginning that matches to a project uuid i believe.
 prefix: '/v1'
 
 resources:
