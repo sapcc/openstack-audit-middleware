@@ -71,17 +71,20 @@ class ConfigError(Exception):
 class OpenStackResource(resource.Resource):
     """Extended CADF resource class with custom fields for OpenStack scope."""
 
-    def __init__(self, project_id=None, domain_id=None, **kwargs):
+    def __init__(self, project_id=None, domain_id=None,
+                 application_credential_id=None, **kwargs):
         """Initialize a new resource that has an OpenStack scope."""
         super(OpenStackResource, self).__init__(**kwargs)
         if project_id:
             self.project_id = project_id
         if domain_id:
             self.domain_id = domain_id
+        if application_credential_id:
+            self.application_credential_id = application_credential_id
 
     def __getattr__(self, item):
         """Circumvent the magic attribute handling of pycadf here."""
-        if item in ['project_id', 'domain_id']:
+        if item in ['project_id', 'domain_id', 'application_credential_id']:
             return None
         else:
             return super(OpenStackResource, self).__getattribute__(item)
@@ -486,8 +489,17 @@ class OpenStackAuditMiddleware(object):
 
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
         domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
+        application_credential_id = None
+        token_info = request.environ.get('keystone.token_info')
+        if token_info:
+            application_credential = token_info['token'].get(
+                'application_credential')
+            if application_credential:
+                application_credential_id = application_credential['id']
+
         initiator = OpenStackResource(
             project_id=project_id, domain_id=domain_id,
+            application_credential_id=application_credential_id,
             typeURI=taxonomy.ACCOUNT_USER,
             id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
