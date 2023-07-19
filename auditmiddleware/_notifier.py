@@ -174,7 +174,7 @@ def create_notifier(conf, log, metrics_enabled):
         if mqs is None:
             mqs = 10000
         notf = _MessagingNotifier(notifier, log, mqs, metrics_enabled)
-        notf.setDaemon(True)
+        notf.daemon = True
         notf.start()
         return notf
 
