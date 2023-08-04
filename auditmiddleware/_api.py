@@ -488,6 +488,17 @@ class OpenStackAuditMiddleware(object):
             return None
 
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
+        # If project_id is undefined, look for another variable. This is
+        # added specific to catching delete events from Neutron
+        if project_id is None:
+            adhoc_attrs = request.environ.get('webob.adhoc_attrs', {})
+            context = adhoc_attrs.get('context', {})
+            original_resources = context.get('original_resources', [])
+            if original_resources and isinstance(original_resources, list):
+                first_resource = original_resources[0]
+                if isinstance(first_resource, dict):
+                    project_id = first_resource.get('project_id')
+
         domain_id = request.environ.get('HTTP_X_DOMAIN_ID')
         application_credential_id = None
         token_info = request.environ.get('keystone.token_info')
