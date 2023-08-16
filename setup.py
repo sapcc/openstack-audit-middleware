@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# THIS FILE IS MANAGED BY THE GLOBAL REQUIREMENTS REPO - DO NOT EDIT
 import setuptools
+
+VERSION = '1.2'
+DESCRIPTION = 'OpenStack Audit Middleware'
+LONG_DESCRIPTION = 'OpenStack Audit Middleware CADF audit trail from API calls'
 
 # In python < 2.7.4, a lazy loading of package `pbr` will break
 # setuptools if some other modules registered functions in `atexit`.
@@ -25,5 +28,14 @@ except ImportError:
     pass
 
 setuptools.setup(
+    name="openstack-audit-middleware",
+    version=VERSION,
+    author="notque (Nathan Oyler)",
+    author_email="<nathan.oyler@sap.com>",
+    description=DESCRIPTION,
+    long_description_content_type="text/markdown",
+    long_description=LONG_DESCRIPTION,
+    keywords=['python', 'openstack', 'audit', 'cadf'],
     setup_requires=['pbr>=2.0.0'],
     pbr=True)
+
