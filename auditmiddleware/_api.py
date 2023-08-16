@@ -72,7 +72,8 @@ class OpenStackResource(resource.Resource):
     """Extended CADF resource class with custom fields for OpenStack scope."""
 
     def __init__(self, project_id=None, domain_id=None,
-                 application_credential_id=None, **kwargs):
+                 application_credential_id=None,
+                 request_id=None, global_request_id=None, **kwargs):
         """Initialize a new resource that has an OpenStack scope."""
         super(OpenStackResource, self).__init__(**kwargs)
         if project_id:
@@ -81,6 +82,10 @@ class OpenStackResource(resource.Resource):
             self.domain_id = domain_id
         if application_credential_id:
             self.application_credential_id = application_credential_id
+        if request_id:
+            self.request_id = request_id
+        if global_request_id:
+            self.global_request_id = global_request_id
 
     def __getattr__(self, item):
         """Circumvent the magic attribute handling of pycadf here."""
@@ -511,6 +516,8 @@ class OpenStackAuditMiddleware(object):
         initiator = OpenStackResource(
             project_id=project_id, domain_id=domain_id,
             application_credential_id=application_credential_id,
+            request_id=request.environ.get('openstack.request_id'),
+            global_request_id=request.environ.get('openstack.global_request_id'),
             typeURI=taxonomy.ACCOUNT_USER,
             id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
