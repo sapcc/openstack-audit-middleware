@@ -49,7 +49,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
 
     def test_get_list(self):
         """Test listing items of a resource (GET w/o object ID)."""
-        url = self.build_url('servers', prefix='/compute/v2.1')
+        url = self.build_url('servers', prefix='/v2.1')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
@@ -522,12 +522,12 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
         """Test using a custom action for reading lists."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('types', prefix='/v3/' + self.project_id,
-                             res_id=rid, suffix="os-volume-type-access")
+                             res_id=rid, suffix="volume-type-access")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_READ +
-                         "/acl", "storage/volume/type", rid, None,
+                         "/get", "storage/volume/type", rid, None,
                          "success")
 
 
