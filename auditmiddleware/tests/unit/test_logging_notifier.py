@@ -36,6 +36,10 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
             path = '/v2/' + self.project_id + '/servers'
             app.get(path, extra_environ=self.get_environ_header())
 
+            # Ensure that log.info was called
+            self.assertGreater(len(log.call_args_list), 0,
+                                "log.info was not called")
+
             # Check notification'
             call_args = log.call_args_list[0][0]
             self.assertEqual('audit.cadf', call_args[1]['event_type'])

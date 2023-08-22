@@ -144,7 +144,7 @@ class AuditMiddleware(object):
 
     @webob.dec.wsgify
     def __call__(self, req):
-        """Here is the actual application call that we are "decorating"."""
+        """Describe the actual application call that is being "decorated"."""
         if req.method in self._ignore_req_list:
             return req.get_response(self._application)
 
