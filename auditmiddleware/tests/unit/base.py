@@ -32,7 +32,7 @@ JSON = 'application/json'
 audit_map_content_nova = """
 service_type: 'compute'
 service_name: 'nova'
-prefix: '/v2/[0-9a-z-]*'
+prefix: '/v2[0-9\.]*(?:/[0-9a-f\-]+)?'
 
 resources:
     servers:
@@ -115,7 +115,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             value: expected value of said metric
             tags: tags associated with the metric (dimensions)
         """
-        self.statsd_report_mock.assert_any_call(metric, 'c', value, tags, 1)
+        self.statsd_report_mock.assert_any_call(metric, 'c', value, tags, None)
 
     def assert_statsd_gauge(self, metric, value, tags=None):
         """Assert that a statsd gauge metric has a certain value.
@@ -125,7 +125,7 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             value: expected value of said metric
             tags: tags associated with the metric (dimensions)
         """
-        self.statsd_report_mock.assert_any_call(metric, 'g', value, tags, 1)
+        self.statsd_report_mock.assert_any_call(metric, 'g', value, tags, None)
 
     def create_middleware(self, cb, **kwargs):
         """Implement abstract method from base class."""

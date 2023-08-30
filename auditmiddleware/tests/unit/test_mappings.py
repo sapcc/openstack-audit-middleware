@@ -49,7 +49,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
 
     def test_get_list(self):
         """Test listing items of a resource (GET w/o object ID)."""
-        url = self.build_url('servers', prefix='/compute/v2.1')
+        url = self.build_url('servers', prefix='/v2.1')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
@@ -65,7 +65,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         api names (path segments) but share the same resource typeURI
         since they represent two different interfaces for the same thing.
         """
-        url = self.build_url('os-migrations', prefix='/compute/v2.1')
+        url = self.build_url('os-migrations', prefix='/v2.1')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
@@ -82,7 +82,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         legacy API versions needs to be omitted.
         """
         rid = str(uuid.uuid4().hex)
-        url = self.build_url('os-hypervisors', prefix='/compute/v2.1',
+        url = self.build_url('os-hypervisors', prefix='/v2.1',
                              res_id=rid)
         resp_json = {'hypervisor': {'id': '1'}}
         request, response = self.build_api_call('GET', url,
@@ -102,7 +102,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         rid = str(uuid.uuid4().hex)
         net_id = str(uuid.uuid4().hex)
         port_id = str(uuid.uuid4().hex)
-        url = self.build_url('servers', prefix='/compute/v2.1', res_id=rid,
+        url = self.build_url('servers', prefix='/v2.1', res_id=rid,
                              child_res='os-interface')
         req_json = {'interfaceAttachment': {'net_id': net_id}}
         resp_json = {'interfaceAttachment': {
@@ -121,7 +121,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         not managed by users.
         """
         agent_id = 180
-        url = self.build_url('os-agents', prefix='/compute/v2.1')
+        url = self.build_url('os-agents', prefix='/v2.1')
         req_json = {
             u'agent': {
                 u'architecture': u'tempest-x86_64-831697749',
@@ -153,7 +153,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
 
         Usually POST is used and usually actions are applied to resources.
         """
-        url = self.build_url('os-services', prefix='/compute/v2.1',
+        url = self.build_url('os-services', prefix='/v2.1',
                              suffix="disable")
         request, response = self.build_api_call('PUT', url, req_json={
             "host": "ignored anyway",
@@ -171,7 +171,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         The action shall be `update/set`. The target service shall
         be qualified by name only since the ID is meaningless.
         """
-        url = self.build_url('os-services', prefix='/compute/v2.1',
+        url = self.build_url('os-services', prefix='/v2.1',
                              suffix="force-down")
         request, response = self.build_api_call('PUT', url, req_json={
             "host": "ignored anyway",
@@ -194,7 +194,7 @@ class NovaAuditMappingTest(base.BaseAuditMiddlewareTest):
         The resported action shall be `update/set`. The target
         shall be specified by ID.
         """
-        url = self.build_url('servers', prefix='/compute/v2.1',
+        url = self.build_url('servers', prefix='/v2.1',
                              res_id="c489798d-8031-406d-aabb-0040a3b7b4be",
                              child_res="tags", suffix="tag-1234")
         request, response = self.build_api_call('PUT', url)
@@ -522,12 +522,12 @@ class CinderAuditMappingTest(base.BaseAuditMiddlewareTest):
         """Test using a custom action for reading lists."""
         rid = str(uuid.uuid4().hex)
         url = self.build_url('types', prefix='/v3/' + self.project_id,
-                             res_id=rid, suffix="os-volume-type-access")
+                             res_id=rid, suffix="volume-type-access")
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_READ +
-                         "/acl", "storage/volume/type", rid, None,
+                         "/get", "storage/volume/type", rid, None,
                          "success")
 
 

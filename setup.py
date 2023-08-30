@@ -13,6 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+OpenStack Audit Middleware setup.py.
+
+This module contains the setup configuration for the project.
+It defines dependencies, package information, and other metadata.
+"""
+
 import setuptools
 
 VERSION = '1.2'
@@ -38,4 +45,3 @@ setuptools.setup(
     keywords=['python', 'openstack', 'audit', 'cadf'],
     setup_requires=['pbr>=2.0.0'],
     pbr=True)
-
