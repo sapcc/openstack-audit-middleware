@@ -89,7 +89,7 @@ class OpenStackResource(resource.Resource):
 
     def __getattr__(self, item):
         """Circumvent the magic attribute handling of pycadf here."""
-        if item in ['project_id', 'domain_id', 'application_credential_id']:
+        if item in ['project_id', 'domain_id', 'application_credential_id', 'request_id', 'global_request_id']:
             return None
         else:
             return super(OpenStackResource, self).__getattribute__(item)
