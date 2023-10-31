@@ -513,6 +513,9 @@ class OpenStackAuditMiddleware(object):
             if application_credential:
                 application_credential_id = application_credential['id']
 
+        self.LOG.debug("Request ID: %s", request.environ.get('openstack.request_id'))
+        self.LOG.debug("Global Request ID: %s", request.environ.get('openstack.global_request_id'))
+
         initiator = OpenStackResource(
             project_id=project_id, domain_id=domain_id,
             application_credential_id=application_credential_id,
