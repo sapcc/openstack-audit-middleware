@@ -14,6 +14,8 @@
 
 from auditmiddleware.tests.unit import base
 import mock
+
+from auditmiddleware import _notifier
 from oslo_messaging import MessagingException
 import time
 
@@ -160,4 +162,4 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         # make sure it is using a local notifier instead of oslo_messaging
         self.assertTrue(
             isinstance(audit_middleware._notifier,
-                       audit._notifier._LogNotifier))
+                       _notifier._LogNotifier))
