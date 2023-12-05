@@ -89,7 +89,11 @@ class OpenStackResource(resource.Resource):
 
     def __getattr__(self, item):
         """Circumvent the magic attribute handling of pycadf here."""
-        if item in ['project_id', 'domain_id', 'application_credential_id', 'request_id', 'global_request_id']:
+        allowed_attributes = [
+            'project_id', 'domain_id', 'application_credential_id',
+            'request_id', 'global_request_id'
+        ]
+        if item in allowed_attributes:
             return None
         else:
             return super(OpenStackResource, self).__getattribute__(item)
@@ -514,19 +518,25 @@ class OpenStackAuditMiddleware(object):
                 application_credential_id = application_credential['id']
 
         initiator = OpenStackResource(
-            project_id=project_id, domain_id=domain_id,
+            project_id=project_id,
+            domain_id=domain_id,
             application_credential_id=application_credential_id,
             request_id=request.environ.get('openstack.request_id'),
-            global_request_id=request.environ.get('openstack.global_request_id'),
+            global_request_id=request.environ.get(
+                'openstack.global_request_id'),
             typeURI=taxonomy.ACCOUNT_USER,
             id=request.environ.get('HTTP_X_USER_ID', taxonomy.UNKNOWN),
             name=request.environ.get('HTTP_X_USER_NAME', taxonomy.UNKNOWN),
             domain=request.environ.get('HTTP_X_USER_DOMAIN_NAME',
                                        taxonomy.UNKNOWN),
-            host=host.Host(address=request.client_addr,
-                           agent=request.user_agent))
+            host=host.Host(
+                address=request.client_addr,
+                agent=request.user_agent
+            )
+        )
 
         action_result = None
+
         event_reason = None
         if response:
             if 200 <= response.status_int < 400:
