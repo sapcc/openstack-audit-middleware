@@ -160,7 +160,8 @@ class _MessagingNotifier(Thread):
 
 def create_notifier(conf, log, metrics_enabled):
     """Create a new notifier."""
-    if oslo_messaging and conf.audit_middleware_notifications.get('use_oslo_messaging'):
+    if oslo_messaging and conf.audit_middleware_notifications.get(
+        'use_oslo_messaging'):
         transport = oslo_messaging.get_notification_transport(
             conf,
             url=conf.audit_middleware_notifications.transport_url)

@@ -155,6 +155,7 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         self.assertEqual(transport_url, m.call_args_list[0][1]['url'])
 
     def test_do_not_use_oslo_messaging(self):
+        """Test that oslo_messaging can be disabled."""
         self.cfg.config(use_oslo_messaging=False,
                         group='audit_middleware_notifications')
         audit_middleware = self.create_simple_middleware()
