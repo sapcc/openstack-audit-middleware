@@ -380,10 +380,14 @@ class OpenStackAuditMiddleware(object):
                        res_spec, request, response, suffix=None):
         events = []
 
+        # Check if the response has a JSON body
+        has_json_body = (response and
+            response.content_length > 0 and
+            response.text and  # Check if response body is not empty
+            response.content_type == "application/json")
+
         # check for update operations (POST, PUT, PATCH)
-        if request.method[0] == 'P' and response \
-                and response.content_length > 0 \
-                and response.content_type == "application/json":
+        if request.method[0] == 'P' and has_json_body:
             res_payload = response.json
 
             # check for bulk-operation
@@ -440,6 +444,7 @@ class OpenStackAuditMiddleware(object):
 
                 events.append(event)
         else:
+            # Handle requests without JSON response bodies or other methods
             event = self._create_cadf_event(target_project, res_spec, res_id,
                                             res_parent_id,
                                             request, response, suffix)
