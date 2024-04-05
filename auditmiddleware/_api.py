@@ -382,7 +382,7 @@ class OpenStackAuditMiddleware(object):
 
         # Check if the response has a JSON body
         has_json_body = (response and
-            response.content_length > 0 and
+            (response.content_length or 0) > 0 and
             response.text and  # Check if response body is not empty
             response.content_type == "application/json")
 
