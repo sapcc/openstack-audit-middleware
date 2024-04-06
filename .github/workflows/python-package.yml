@@ -1,0 +1,27 @@
+name: Python package with Tox
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  tox-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.8" 
+
+    - name: Install Tox
+      run: pip install tox
+
+    - name: Run Tox
+      run: tox
+
+    - name: Lint with Tox
+      run: tox -e lint
