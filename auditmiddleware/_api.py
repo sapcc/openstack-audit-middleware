@@ -382,9 +382,15 @@ class OpenStackAuditMiddleware(object):
 
         # Check if the response has a JSON body
         has_json_body = (response and
-            (response.content_length or 0) > 0 and
-            response.text and  # Check if response body is not empty
-            response.content_type == "application/json")
+                        (response.content_length or 0) > 0 and
+                        response.content_type == "application/json")    
+        if has_json_body:
+            try:
+                # Only attempt to access response.text if we think it's JSON
+                has_json_body = bool(response.text)
+            except UnicodeDecodeError:
+                # If we can't decode the text, it's not JSON
+                has_json_body = False
 
         # check for update operations (POST, PUT, PATCH)
         if request.method[0] == 'P' and has_json_body:
