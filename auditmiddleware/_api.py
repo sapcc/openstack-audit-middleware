@@ -381,16 +381,16 @@ class OpenStackAuditMiddleware(object):
         events = []
 
         # Check if the response has a JSON body
-        has_json_body = (response and
-                        (response.content_length or 0) > 0 and
-                        response.content_type == "application/json")    
-        if has_json_body:
-            try:
-                # Only attempt to access response.text if we think it's JSON
-                has_json_body = bool(response.text)
-            except UnicodeDecodeError:
-                # If we can't decode the text, it's not JSON
-                has_json_body = False
+        has_json_body = False
+        if response and (response.content_length or 0) > 0:
+            if response.content_type == "application/json":
+                try:
+                    # Attempt to access response.text
+                    response.text
+                    has_json_body = True
+                except UnicodeDecodeError:
+                    # If we can't decode the text, it's not JSON
+                    has_json_body = False
 
         # check for update operations (POST, PUT, PATCH)
         if request.method[0] == 'P' and has_json_body:
