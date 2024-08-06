@@ -23,7 +23,9 @@ from testtools.matchers import MatchesRegex
 import uuid
 import webob
 import webob.dec
+import logging
 
+logging.basicConfig(level=logging.DEBUG)
 
 iso8601 = r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
 
