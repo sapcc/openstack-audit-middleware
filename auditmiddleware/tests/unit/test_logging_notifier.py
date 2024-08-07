@@ -30,6 +30,8 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
 
     def test_api_request_no_messaging(self):
         """Test that logging works and event_type is correct."""
+        self.cfg.config(use_oslo_messaging=False,
+                        group='audit_middleware_notifications')
         app = self.create_simple_app()
 
         with mock.patch('auditmiddleware._LOG.info') as log:
