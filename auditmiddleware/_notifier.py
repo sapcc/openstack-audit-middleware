@@ -13,7 +13,7 @@
 """Provides a oslo-messaging and a log-based messaging connector."""
 
 import os
-from six.moves import queue
+import queue
 import sys
 from threading import Thread
 
