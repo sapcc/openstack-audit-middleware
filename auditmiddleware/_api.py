@@ -744,10 +744,10 @@ class OpenStackAuditMiddleware(object):
 
         # no action mapped to suffix => custom key operation
         action = self._get_action_from_method(method, res_spec, res_id)
-        
+
         if action in _key_action_suffix_map:
             action += _key_action_suffix_map[action]
-        
+
         return action, path_suffix
 
     def _get_action_from_payload(self, request, res_spec, res_id):
