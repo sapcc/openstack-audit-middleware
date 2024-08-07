@@ -15,6 +15,7 @@
 import auditmiddleware
 from auditmiddleware._api import _make_tags
 from auditmiddleware.tests.unit import utils
+import logging
 from mock import mock
 from oslo_config import fixture as cfg_fixture
 from oslo_messaging import conffixture as msg_fixture
@@ -24,6 +25,7 @@ import uuid
 import webob
 import webob.dec
 
+logging.basicConfig(level=logging.DEBUG)
 
 iso8601 = r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}[+-]\d\d:\d\d$'
 

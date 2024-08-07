@@ -47,7 +47,7 @@ class TestHttpMethods(base.BaseAuditMiddlewareTest):
         event['requestPath'] = mock_request.path
 
         self.check_event(mock_request, mock_response, event, 'read',
-                         'compute/server', 
+                         'compute/server',
                          '00000000-0000-0000-0000-00000000007b',
                          None, 'success')
         self.assertEqual(event['initiator']['id'], self.user_id)
@@ -69,7 +69,7 @@ class TestHttpMethods(base.BaseAuditMiddlewareTest):
         mock_response = MagicMock()
         mock_response.status_int = 202
         mock_response.status_code = 202
-        mock_response.content_length = 100  
+        mock_response.content_length = 100
         mock_response.content_type = 'application/json'
         mock_response.json = {'server': {'id': 'xyz'}}
         mock_response.text = '{"server": {"id": "xyz"}}'
@@ -104,7 +104,7 @@ class TestHttpMethods(base.BaseAuditMiddlewareTest):
         event['requestPath'] = mock_request.path
 
         self.check_event(mock_request, mock_response, event, 'delete',
-                         'compute/server', 
+                         'compute/server',
                          '00000000-0000-0000-0000-00000000007b',
                          None, 'success')
         self.assertEqual(event['initiator']['id'], self.user_id)
@@ -133,7 +133,7 @@ class TestHttpMethods(base.BaseAuditMiddlewareTest):
         event['requestPath'] = mock_request.path
 
         self.check_event(mock_request, mock_response, event, 'update',
-                         'compute/server', 
+                         'compute/server',
                          '00000000-0000-0000-0000-00000000007b',
                          None, 'success')
         self.assertEqual(event['initiator']['id'], self.user_id)

@@ -1,7 +1,7 @@
 service_type: 'storage/share'
 service_name: 'manila'
 
-prefix: '/v[0-9\.]*'
+prefix: '/v[1-2]'
 
 resources:
   availability-zones:
@@ -19,6 +19,9 @@ resources:
       pools:
   security-services:
     # model details listing a action
+    payloads:
+      exclude:
+        - password
     custom_actions:
       detail: read/list/details
   services:

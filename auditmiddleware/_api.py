@@ -284,6 +284,10 @@ class OpenStackAuditMiddleware(object):
             path: URL path being parsed
             cursor: current position in the path as it is parsed
         """
+        self._log.debug("_build_events: path=%(path)s, cursor=%(cursor)s, "
+                "res_spec=%(res_spec)s, res_id=%(res_id)s",
+                {'path': path, 'cursor': cursor,
+                 'res_spec': res_spec, 'res_id': res_id})
         # Check if the end of path is reached and event can be created finally
         if cursor == -1:
             # end of path reached, create the event
@@ -630,6 +634,10 @@ class OpenStackAuditMiddleware(object):
     def _create_target_resource(self, target_project, res_spec, res_id,
                                 res_parent_id=None, payload=None, key=None):
         """Build the event's target element from  the payload."""
+        self._log.debug("_create_target_resource: res_spec=%(res_spec)s, "
+            "res_id=%(res_id)s, res_parent_id=%(res_parent_id)s",
+            {'res_spec': res_spec, 'res_id': res_id,
+                'res_parent_id': res_parent_id})
         project_id = target_project
         rid = res_id
         name = None
@@ -684,6 +692,9 @@ class OpenStackAuditMiddleware(object):
             request: the request
             suffix: the last path component (already known)
         """
+        self._log.debug("_get_action_and_key: res_spec=%(res_spec)s, "
+            "res_id=%(res_id)s, suffix=%(suffix)s",
+            {'res_spec': res_spec, 'res_id': res_id, 'suffix': suffix})
         if suffix is None:
             return self._get_action_from_method(request.method, res_spec,
                                                 res_id), None
@@ -731,9 +742,12 @@ class OpenStackAuditMiddleware(object):
                 # action suppressed by intention
                 return None, None
 
-        # no action mapped to suffix => custom key
+        # no action mapped to suffix => custom key operation
         action = self._get_action_from_method(method, res_spec, res_id)
-        action += _key_action_suffix_map[action]
+
+        if action in _key_action_suffix_map:
+            action += _key_action_suffix_map[action]
+
         return action, path_suffix
 
     def _get_action_from_payload(self, request, res_spec, res_id):

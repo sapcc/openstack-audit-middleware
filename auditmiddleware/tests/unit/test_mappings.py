@@ -555,17 +555,14 @@ class ManilaAuditMappingTest(base.BaseAuditMiddlewareTest):
         return self.audit_map_file_fixture
 
     def test_get_list_shares(self):
-        """Test listing resource instances.
-
-        This is just a arbitary smoke-test for Manila.
-        """
-        url = self.build_url('shares', prefix='/v2/' + self.project_id)
+        """Test a list action for Manila shares."""
+        url = self.build_url('shares', prefix='/v2')
         request, response = self.build_api_call('GET', url)
         event = self.build_event(request, response)
 
-        self.check_event(request, response, event, taxonomy.ACTION_LIST,
-                         "storage/share/shares",
-                         None, self.service_name)
+        self.check_event(request, response, event, 'read/list',
+                        "storage/share/shares",
+                        None, self.service_name)
 
 
 class DesignateAuditMappingTest(base.BaseAuditMiddlewareTest):
