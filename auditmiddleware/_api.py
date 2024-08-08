@@ -17,7 +17,6 @@ import hashlib
 import json
 import os
 import re
-import six
 import socket
 import uuid
 import yaml
@@ -104,9 +103,9 @@ def str_map(param):
     if not param:
         return {}
 
-    for k, v in six.iteritems(param):
-        if v is not None and (not isinstance(k, six.string_types) or
-                              not isinstance(v, six.string_types)):
+    for k, v in param.items():
+        if v is not None and (not isinstance(k, str) or
+                              not isinstance(v, str)):
             raise Exception("Invalid config entry %s:%s (not strings)",
                             k, v)
 
@@ -190,7 +189,7 @@ class OpenStackAuditMiddleware(object):
         """
         result = {}
 
-        for name, s in six.iteritems(res_dict):
+        for name, s in res_dict.items():
             res_spec, rest_name = self._build_res_spec(name, parent_type_uri,
                                                        s)
 
@@ -492,10 +491,10 @@ class OpenStackAuditMiddleware(object):
                                                  subpayload)
 
         # extract custom attributes from the payload
-        for attr, typeURI in six.iteritems(res_spec.custom_attributes):
+        for attr, typeURI in res_spec.custom_attributes.items():
             value = subpayload.get(attr)
             if value:
-                if not isinstance(value, six.string_types):
+                if not isinstance(value, str):
                     value = json.dumps(value, separators=(',', ':'))
                 attach_val = Attachment(typeURI=typeURI, content=value,
                                         name=attr)

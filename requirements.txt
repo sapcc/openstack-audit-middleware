@@ -11,4 +11,3 @@ pycadf!=2.0.0,>=1.1.0 # Apache-2.0
 PyYAML
 requests>=2.14.2 # Apache-2.0
 WebOb>=1.7.1 # MIT
-six>=1.10.0
