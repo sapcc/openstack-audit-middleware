@@ -16,11 +16,11 @@ import auditmiddleware
 from auditmiddleware._api import _make_tags
 from auditmiddleware.tests.unit import utils
 import logging
-from mock import mock
 from oslo_config import fixture as cfg_fixture
 from oslo_messaging import conffixture as msg_fixture
 from oslotest import createfile
 from testtools.matchers import MatchesRegex
+from unittest import mock
 import uuid
 import webob
 import webob.dec

@@ -13,7 +13,7 @@
 """Test the correct interaction with oslo messaging."""
 
 from auditmiddleware.tests.unit import base
-import mock
+from unittest import mock
 
 from auditmiddleware import _notifier
 from oslo_messaging import MessagingException
@@ -161,6 +161,5 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         audit_middleware = self.create_simple_middleware()
 
         # make sure it is using a local notifier instead of oslo_messaging
-        self.assertTrue(
-            isinstance(audit_middleware._notifier,
-                       _notifier._LogNotifier))
+        self.assertIsInstance(audit_middleware._notifier,
+                              _notifier._LogNotifier)
