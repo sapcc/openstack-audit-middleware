@@ -13,7 +13,7 @@
 
 """Test proper integration into the paste pipeline of OpenStack services."""
 import fixtures
-import mock
+from unittest import mock
 import webob
 
 from auditmiddleware.tests.unit import base

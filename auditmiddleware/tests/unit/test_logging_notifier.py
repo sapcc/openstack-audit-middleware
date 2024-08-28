@@ -14,7 +14,7 @@
 
 from auditmiddleware.tests.unit import base
 import fixtures
-import mock
+from unittest import mock
 
 
 class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
