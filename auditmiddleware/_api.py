@@ -365,6 +365,16 @@ class OpenStackAuditMiddleware(object):
         information to understand what happened. This allows for
         incremental improvement.
         """
+        # Defensive check for None token
+        if token is None:
+            self._log.warning("unknown resource: None (created on demand)")
+            res_name = 'unknown'
+            res_dict = {'api_name': 'unknown'}
+            sub_res_spec, _ = self._build_res_spec(res_name,
+                                                parent_type_uri,
+                                                res_dict)
+            return sub_res_spec
+
         self._log.warning("unknown resource: %s (created on demand)",
                           token)
         res_name = token.replace('_', '-')
