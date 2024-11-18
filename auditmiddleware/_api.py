@@ -529,14 +529,14 @@ class OpenStackAuditMiddleware(object):
             adhoc_attrs = request.environ.get('webob.adhoc_attrs', {})
 
             # Get the context - could be dict or RequestContext object
-            context = adhoc_attrs.get('context')
+            context = adhoc_attrs.get('context', {})
 
+            original_resources = []
             # Handle both dict and RequestContext object types
-            original_resources = None
-            if isinstance(context, dict):
-                original_resources = context.get('original_resources', [])
-            elif hasattr(context, 'original_resources'):
+            if hasattr(context, 'original_resources'):
                 original_resources = context.original_resources
+            else:
+                original_resources = context.get('original_resources', [])
 
             # If we found original_resources and it's a list, get project_id
             if original_resources and isinstance(original_resources, list):
