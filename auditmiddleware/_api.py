@@ -531,8 +531,8 @@ class OpenStackAuditMiddleware(object):
             # Get the context - could be dict or RequestContext object
             context = adhoc_attrs.get('context', {})
 
-            original_resources = []
             # Handle both dict and RequestContext object types
+            original_resources = []
             if hasattr(context, 'original_resources'):
                 original_resources = context.original_resources
             else:
