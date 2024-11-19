@@ -520,13 +520,25 @@ class OpenStackAuditMiddleware(object):
         if not action:
             return None
 
+        # Try to get project_id from request headers
         project_id = request.environ.get('HTTP_X_PROJECT_ID')
-        # If project_id is undefined, look for another variable. This is
-        # added specific to catching delete events from Neutron
+
+        # If no project_id found, try to get it from the request context
         if project_id is None:
+            # Get the adhoc attributes from the request environment
             adhoc_attrs = request.environ.get('webob.adhoc_attrs', {})
+
+            # Get the context - could be dict or RequestContext object
             context = adhoc_attrs.get('context', {})
-            original_resources = context.get('original_resources', [])
+
+            # Handle both dict and RequestContext object types
+            original_resources = []
+            if hasattr(context, 'original_resources'):
+                original_resources = context.original_resources
+            else:
+                original_resources = context.get('original_resources', [])
+
+            # If we found original_resources and it's a list, get project_id
             if original_resources and isinstance(original_resources, list):
                 first_resource = original_resources[0]
                 if isinstance(first_resource, dict):
