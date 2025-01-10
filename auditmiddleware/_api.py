@@ -453,6 +453,7 @@ class OpenStackAuditMiddleware(object):
 
                 # attach payload if requested
                 if self._payloads_enabled and res_spec.payloads['enabled'] \
+                   and request.content_length is not None \
                    and request.content_length > 0 \
                    and request.content_type == "application/json":
                     req_pl = request.json
