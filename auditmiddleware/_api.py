@@ -776,7 +776,26 @@ class OpenStackAuditMiddleware(object):
         """Determine the CADF action from the payload."""
         try:
             payload = request.json
+
+            # Handle case where payload is a string (JSON-encoded)
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    self._log.warning(
+                        "Invalid JSON string payload for path: %s",
+                        request.path)
+                    return None
+
             if payload:
+                # Type checking for payload
+                if not isinstance(payload, dict):
+                    self._log.warning(
+                        "Unexpected payload type %s for path: %s",
+                        type(payload), request.path
+                    )
+                    return None
+
                 rest_action = next(iter(payload))
                 # check for individual mapping of action
                 action = res_spec.custom_actions.get(rest_action)
