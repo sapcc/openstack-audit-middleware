@@ -232,7 +232,7 @@ class OpenStackAuditMiddleware(object):
             # derive the name of the individual resource instances (elements)
             # by omitting the last character of the resource name
             el_type_name = spec.get('el_type_name', type_name[:-1])
-            el_type_uri = type_uri[:-1]
+            el_type_uri = spec.get('el_type_uri', type_uri[:-1])
             childs_parent_type_uri = el_type_uri
         else:
             childs_parent_type_uri = type_uri
