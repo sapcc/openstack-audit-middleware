@@ -548,8 +548,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
     def test_post_resource_undeclared(self):
         """Test that resource paths w/o mapping are still causing events.
 
-        Those events can be spotted by the "X" prefixing the resource
-        name derived from the URL path.
+        Those events can be spotted by log messages in the api container.
         """
         rid = str(uuid.uuid4().hex)
         rname = "myname"
@@ -560,13 +559,12 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_CREATE,
-                         "compute/Xyetunknown", rid, rname)
+                         "compute/yetunknown", rid, rname)
 
     def test_put_resource_undeclared(self):
         """Test that resource paths w/o mapping are still causing events.
 
-        Those events can be spotted by the "X" prefixing the resource
-        name derived from the URL path.
+        Those events can be spotted by log messages in the api container.
         """
         rid = str(uuid.uuid4().hex)
         rid2 = str(uuid.uuid4().hex)
@@ -577,7 +575,7 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
         event = self.build_event(request, response)
 
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
-                         "compute/Xyetunknown/Xuchild", rid2)
+                         "compute/yetunknown/uchild", rid2)
 
     def test_post_action_no_response(self):
         """Test events are created for POST actions with no response payload.

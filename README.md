@@ -200,7 +200,7 @@ Usually all custom actions should be listed in the mapping because otherwise the
  
  The mapping of actions is complex: For payload-encoded actions a default-mapping will be applied which determines the primary action (e.g. `update`) from the HTTP method and adds the action name from the payload (e.g. `update/myaction`).
 
- For path-encoded actions you can reach a similar behaviour with a generic rule of the form `"<method>:*": "<action>"` (e.g. `"POST:*": "read"`). You can refer to the actual action name in the path via `*` (e.g. `"POST:*": "update/*"`). If the right side of the rule is `null, the `entire request will be suppressed, so that no event is emitted (e.g. `"POST:*": null`).
+ For path-encoded actions you can reach a similar behaviour with a generic rule of the form `"<method>:*": "<action>"` (e.g. `"POST:*": "read"`). You can refer to the actual action name in the path via `*` (e.g. `"POST:*": "update/*"`). If the right side of the rule is `null`, the entire request will be suppressed, so that no event is emitted (e.g. `"POST:*": null`).
 
  If there is no rule matching the path suffix, it will be interpreted as a _key_, not as an action. That means that the action will be determined from the HTTP method only and an attachment with the name `key` and the name of the key as `content` will be added to the event.
 
@@ -269,9 +269,9 @@ In our example this looks like this:
 Undeclared Resources
 --------------------
 
-Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics. They can be recognized by the `X` prefix in the resource name.
+Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics.
 
-When those X-resources show up, the mapping file should be extended with an appropriate resource definition. The reason is that the heuristics to discover and map undeclared resources are not covering all kinds of requests. There are ambiguities. 
+When those unknown resoucre log messages show up, the mapping file should be extended with an appropriate resource definition. The reason is that the heuristics to discover and map undeclared resources are not covering all kinds of requests. There are ambiguities. 
 
 Developing Audit Middleware
 ===========================
