@@ -749,10 +749,9 @@ class OpenStackAuditMiddleware(object):
                                              res_spec, res_id):
         """Determine the CADF action from the URL path."""
         rest_action = path_suffix
-        # check for individual mapping of action
-        action = res_spec.custom_actions.get(rest_action)
-        if action is not None:
-            return action, None
+        # check for individual mapping of action, Null to suppress
+        if rest_action in res_spec.custom_actions:
+            return res_spec.custom_actions[rest_action], None
 
         # check for generic mapping
         rule = method + ':*'
@@ -797,10 +796,9 @@ class OpenStackAuditMiddleware(object):
                     return None
 
                 rest_action = next(iter(payload))
-                # check for individual mapping of action
-                action = res_spec.custom_actions.get(rest_action)
-                if action is not None:
-                    return action
+                # check for individual mapping of action, Null to suppress
+                if rest_action in res_spec.custom_actions:
+                    return res_spec.custom_actions[rest_action]
 
                 # apply generic default mapping rule here
                 return self._get_action_from_method(
