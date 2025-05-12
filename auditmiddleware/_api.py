@@ -499,7 +499,8 @@ class OpenStackAuditMiddleware(object):
 
         ev.target = self._create_target_resource(target_project, res_spec,
                                                  res_id, res_parent_id,
-                                                 subpayload)
+                                                 request=request,
+                                                 payload=subpayload)
 
         # extract custom attributes from the payload
         for attr, typeURI in res_spec.custom_attributes.items():
@@ -589,10 +590,13 @@ class OpenStackAuditMiddleware(object):
         target = None
         if res_id or res_parent_id:
             target = self._create_target_resource(project, res_spec, res_id,
-                                                  res_parent_id, key=key)
+                                                  res_parent_id,
+                                                  request=request,
+                                                  key=key)
         else:
             target = self._create_target_resource(project, res_spec,
                                                   None, self._service_id,
+                                                  request=request,
                                                   key=key)
             target.name = self._service_name
 
@@ -654,7 +658,8 @@ class OpenStackAuditMiddleware(object):
         event.add_attachment(attach_val)
 
     def _create_target_resource(self, target_project, res_spec, res_id,
-                                res_parent_id=None, payload=None, key=None):
+                                res_parent_id=None, request=None,
+                                payload=None, key=None):
         """Build the event's target element from  the payload."""
         self._log.debug("_create_target_resource: res_spec=%(res_spec)s, "
             "res_id=%(res_id)s, res_parent_id=%(res_parent_id)s",
@@ -682,7 +687,20 @@ class OpenStackAuditMiddleware(object):
                     payload,
                     res_spec)
 
-        type_uri = res_spec.el_type_uri if rid else res_spec.type_uri
+        type_uri = None
+        if rid:
+            # if we have a resource ID (from path or payload), use element URI
+            type_uri = res_spec.el_type_uri or res_spec.type_uri
+        elif request and request.method == 'POST' and not res_spec.singleton:
+            # if it's a POST to a non-singleton resource
+            # (even if failed, so no rid yet)
+            # the intent is an element, so use element URI
+            type_uri = res_spec.el_type_uri or res_spec.type_uri
+
+        # Fallback: If no specific logic applied, or if it's a singleton
+        if type_uri is None:
+            type_uri = res_spec.type_uri
+
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
         target = OpenStackResource(project_id=project_id, id=rid,
                                    typeURI=type_uri, name=name)
