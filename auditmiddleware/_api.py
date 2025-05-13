@@ -687,7 +687,7 @@ class OpenStackAuditMiddleware(object):
                     payload,
                     res_spec)
 
-        type_uri = None
+        type_uri = res_spec.type_uri
         if rid:
             # if we have a resource ID (from path or payload), use element URI
             type_uri = res_spec.el_type_uri or res_spec.type_uri
@@ -696,10 +696,6 @@ class OpenStackAuditMiddleware(object):
             # (even if failed, so no rid yet)
             # the intent is an element, so use element URI
             type_uri = res_spec.el_type_uri or res_spec.type_uri
-
-        # Fallback: If no specific logic applied, or if it's a singleton
-        if type_uri is None:
-            type_uri = res_spec.type_uri
 
         rid = _make_uuid(rid or res_parent_id or taxonomy.UNKNOWN)
         target = OpenStackResource(project_id=project_id, id=rid,
