@@ -416,9 +416,13 @@ class OpenStackAuditMiddleware(object):
                 # which contains a list of items
                 res_pl = res_payload[res_spec.type_name]
                 req_pl = None
+                # Ensure request has a JSON body before accessing request.json
                 if self._payloads_enabled and res_spec.payloads['enabled'] \
-                        and request.content_type == 'application/json':
-                    req_pl = iter(request.json.get(res_spec.type_name))
+                        and request.content_type == 'application/json' \
+                        and request.content_length is not None \
+                        and request.content_length > 0:
+                    req_pl_data = request.json
+                    req_pl = iter(req_pl_data.get(res_spec.type_name))
 
                 # create one event per item
                 for subpayload in res_pl:
@@ -474,7 +478,9 @@ class OpenStackAuditMiddleware(object):
             if event and request.method[0] == 'P' \
                     and self._payloads_enabled \
                     and res_spec.payloads['enabled'] \
-                    and request.content_type == 'application/json':
+                    and request.content_type == 'application/json' \
+                    and request.content_length is not None \
+                    and request.content_length > 0:
                 self._attach_payload(event, request.json, res_spec)
 
             events = [event]
