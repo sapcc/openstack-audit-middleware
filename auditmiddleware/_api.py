@@ -543,7 +543,7 @@ class OpenStackAuditMiddleware(object):
             original_resources = []
             if hasattr(context, 'original_resources'):
                 original_resources = context.original_resources
-            else:
+            elif isinstance(context, dict):
                 original_resources = context.get('original_resources', [])
 
             # If we found original_resources and it's a list, get project_id
