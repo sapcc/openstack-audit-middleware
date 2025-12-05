@@ -35,13 +35,6 @@ except ImportError:
     pass
 
 setuptools.setup(
-    name="openstack-audit-middleware",
     version=VERSION,
-    author="notque (Nathan Oyler)",
-    author_email="<nathan.oyler@sap.com>",
-    description=DESCRIPTION,
-    long_description_content_type="text/markdown",
-    long_description=LONG_DESCRIPTION,
-    keywords=['python', 'openstack', 'audit', 'cadf'],
     setup_requires=['pbr>=2.0.0'],
     pbr=True)
