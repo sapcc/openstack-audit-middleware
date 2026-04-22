@@ -57,8 +57,12 @@ _UUID_RE = re.compile("[0-9a-f-]+$")
 def _make_uuid(s):
     if s.isdigit():
         return str(uuid.UUID(int=int(s)))
-    else:
-        return s
+    # Extract the UUID from HATEOAS-style resource refs (e.g. secret_ref,
+    # container_ref) that carry a full URL instead of a bare UUID.
+    # pycadf's identifier.py warns when a non-UUID string is used as an id.
+    if '://' in s:
+        s = s.rstrip('/').rsplit('/', 1)[-1]
+    return s
 
 
 class ConfigError(Exception):
