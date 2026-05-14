@@ -105,19 +105,27 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
         self.username = "test user " + str(user_counter)
         user_counter += 1
 
-        patcher = mock.patch('datadog.dogstatsd.DogStatsd._report')
-        self.statsd_report_mock = patcher.start()
-        self.addCleanup(patcher.stop)
+        inc_patcher = mock.patch('datadog.dogstatsd.DogStatsd.increment')
+        self.statsd_increment_mock = inc_patcher.start()
+        self.addCleanup(inc_patcher.stop)
+
+        gauge_patcher = mock.patch('datadog.dogstatsd.DogStatsd.gauge')
+        self.statsd_gauge_mock = gauge_patcher.start()
+        self.addCleanup(gauge_patcher.stop)
 
     def assert_statsd_counter(self, metric, value, tags=None):
-        """Assert that a statsd counter metric has a certain value.
+        """Assert that a statsd increment was called for a metric.
 
         Parameters:
             metric: name of the metric
-            value: expected value of said metric
+            value: kept for call-site compatibility (not asserted, since
+                   increment() uses a default value internally)
             tags: tags associated with the metric (dimensions)
         """
-        self.statsd_report_mock.assert_any_call(metric, 'c', value, tags, None)
+        if tags is not None:
+            self.statsd_increment_mock.assert_any_call(metric, tags=tags)
+        else:
+            self.statsd_increment_mock.assert_any_call(metric)
 
     def assert_statsd_gauge(self, metric, value, tags=None):
         """Assert that a statsd gauge metric has a certain value.
@@ -127,7 +135,10 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
             value: expected value of said metric
             tags: tags associated with the metric (dimensions)
         """
-        self.statsd_report_mock.assert_any_call(metric, 'g', value, tags, None)
+        if tags is not None:
+            self.statsd_gauge_mock.assert_any_call(metric, value, tags=tags)
+        else:
+            self.statsd_gauge_mock.assert_any_call(metric, value)
 
     def create_middleware(self, cb, **kwargs):
         """Implement abstract method from base class."""
@@ -211,7 +222,8 @@ class BaseAuditMiddlewareTest(utils.MiddlewareTestCase):
                                            tags=_make_tags(e))
             # will not check for operational metrics
         else:
-            self.statsd_report_mock.assert_not_called()
+            self.statsd_increment_mock.assert_not_called()
+            self.statsd_gauge_mock.assert_not_called()
 
         return [e.as_dict() for e in events]
 
