@@ -19,7 +19,7 @@ flake8-docstrings==0.2.1.post1
 flake8==2.2.4
 future==0.16.0
 gitdb2==2.0.3
-GitPython==2.1.8
+GitPython==3.1.50
 hacking==0.10.0
 idna==2.6
 iso8601==0.1.12
