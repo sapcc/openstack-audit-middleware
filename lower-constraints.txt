@@ -65,7 +65,7 @@ pytz==2018.3
 PyYAML==3.12
 reno==2.5.0
 requests-mock==1.2.0
-requests==2.14.2
+requests==2.33.0
 requestsexceptions==1.4.0
 rfc3986==1.1.0
 smmap2==2.0.3
