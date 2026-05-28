@@ -12,7 +12,7 @@ coverage==4.0
 cryptography==2.1
 debtcollector==1.19.0
 dogpile.cache==0.6.5
-dulwich==0.19.0
+dulwich==1.2.5
 extras==1.0.0
 fixtures==3.0.0
 flake8-docstrings==0.2.1.post1
