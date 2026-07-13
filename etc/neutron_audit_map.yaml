@@ -163,17 +163,8 @@ resources:
         type_uri: network/vpn/ipsec-policies
         el_type_uri: network/vpn/ipsec-policy
       ipsec-site-connections:
-      vpnservices:
-        type_uri: network/vpn/vpn-services
-    singleton: true
-    children:
-      endpoint-groups:
-      ikepolicies:
-        type_uri: network/vpn/ike-policies
-        el_type_uri: network/vpn/ike-policy
-      ipsecpolicies:
-        type_uri: network/vpn/ipsec-policies
-        el_type_uri: network/vpn/ipsec-policy
-      ipsec-site-connections:
+        payloads:
+          exclude:
+            - psk
       vpnservices:
         type_uri: network/vpn/vpn-services
