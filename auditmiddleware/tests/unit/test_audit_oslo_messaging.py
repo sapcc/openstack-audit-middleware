@@ -163,3 +163,51 @@ class AuditNotifierConfigTest(base.BaseAuditMiddlewareTest):
         # make sure it is using a local notifier instead of oslo_messaging
         self.assertIsInstance(audit_middleware._notifier,
                               _notifier._LogNotifier)
+
+
+class RawAmqpNotifierTest(base.BaseAuditMiddlewareTest):
+    """Tests for _RawAmqpNotifier — plain JSON published without oslo envelope."""
+
+    def test_raw_amqp_driver_selected(self):
+        """driver=raw_amqp must create a _RawAmqpNotifier."""
+        transport_url = 'memory://'
+        self.cfg.config(driver='raw_amqp',
+                        transport_url=transport_url,
+                        group='audit_middleware_notifications')
+        middleware = self.create_simple_middleware()
+        self.assertIsInstance(middleware._notifier, _notifier._RawAmqpNotifier)
+
+    def test_raw_amqp_publishes_plain_json(self):
+        """Events must land on the broker as plain JSON with no oslo wrapper."""
+        import json as _json
+        transport_url = 'memory://'
+        topic = 'notifications'
+        self.cfg.config(driver='raw_amqp',
+                        transport_url=transport_url,
+                        topics=[topic],
+                        group='audit_middleware_notifications')
+
+        published = []
+
+        def _capture_publish(body, content_type, content_encoding, **kw):
+            published.append((body, content_type))
+
+        with mock.patch(
+                'kombu.Producer.publish',
+                side_effect=_capture_publish):
+            app = self.create_simple_app()
+            path = '/v2/' + self.project_id + '/servers'
+            app.get(path, extra_environ=self.get_environ_header())
+            import time; time.sleep(0.5)
+
+        self.assertEqual(1, len(published), 'expected exactly one publish call')
+        body, content_type = published[0]
+        self.assertEqual('application/json', content_type)
+
+        # body must be plain JSON — no oslo.message or payload wrapper
+        event = _json.loads(body)
+        self.assertNotIn('oslo.message', event)
+        self.assertNotIn('oslo.version', event)
+        self.assertNotIn('payload', event)
+        self.assertIn('typeURI', event)
+        self.assertIn('id', event)

@@ -29,7 +29,8 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
         super(TestLoggingNotifier, self).setUp()
 
     def test_api_request_no_messaging(self):
-        """Test that logging works and event_type is correct."""
+        """Test that logging works and event is plain JSON."""
+        import json as _json
         self.cfg.config(use_oslo_messaging=False,
                         group='audit_middleware_notifications')
         app = self.create_simple_app()
@@ -38,10 +39,12 @@ class TestLoggingNotifier(base.BaseAuditMiddlewareTest):
             path = '/v2/' + self.project_id + '/servers'
             app.get(path, extra_environ=self.get_environ_header())
 
-            # Ensure that log.info was called
             self.assertGreater(len(log.call_args_list), 0,
                                 "log.info was not called")
 
-            # Check notification'
-            call_args = log.call_args_list[0][0]
-            self.assertEqual('audit.cadf', call_args[1]['event_type'])
+            # body is plain JSON — no oslo wrapper
+            body = log.call_args_list[0][0][0]
+            event = _json.loads(body)
+            self.assertIn('typeURI', event)
+            self.assertNotIn('event_type', event)
+            self.assertNotIn('oslo.message', event)

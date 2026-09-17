@@ -44,7 +44,9 @@ _AUDIT_OPTS = [
     cfg.StrOpt('driver',
                help='The Driver to handle sending notifications. Possible '
                     'values are messaging, messagingv2, routing, log, test, '
-                    'noop. If not specified, then value from '
+                    'noop, raw_amqp. Use raw_amqp to publish events as plain '
+                    'JSON directly to AMQP without any oslo envelope. If not '
+                    'specified, then value from '
                     'oslo_messaging_notifications conf section is used.'),
     cfg.ListOpt('topics',
                 help='List of AMQP topics used for OpenStack notifications. If'

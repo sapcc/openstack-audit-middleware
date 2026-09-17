@@ -10,17 +10,24 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Provides a oslo-messaging and a log-based messaging connector."""
+"""Provides a oslo-messaging, log-based, and raw-AMQP messaging connector."""
 
+import json
 import os
 import queue
 import sys
 from threading import Thread
+from urllib.parse import urlparse
 
 try:
     import oslo_messaging
 except ImportError:
     oslo_messaging = None
+
+try:
+    import kombu
+except ImportError:
+    kombu = None
 
 
 class _LogNotifier(object):
@@ -34,10 +41,7 @@ class _LogNotifier(object):
         self._log = log
 
     def notify(self, context, payload):
-        self._log.info('Event type: audit.cadf, Context: %(context)s, '
-                       'Payload: %(payload)s',
-                       {'context': context, 'event_type': 'audit.cadf',
-                        'payload': payload})
+        self._log.info(json.dumps(payload))
 
 
 class _MessagingNotifier(Thread):
@@ -158,8 +162,116 @@ class _MessagingNotifier(Thread):
             pass
 
 
+class _RawAmqpNotifier(Thread):
+    """Publishes CADF events as plain JSON directly to an AMQP exchange.
+
+    Unlike _MessagingNotifier, this bypasses oslo_messaging entirely so the
+    message body on the wire is just the CADF dict serialised as JSON — no
+    oslo envelope, no double-wrapped payload field.
+
+    Wire format:
+        routing_key : <topic>.info   (e.g. "notifications.info")
+        content_type: application/json
+        body        : json.dumps(cadf_event)
+    """
+
+    def __init__(self, transport_url, topics, log, mem_queue_size,
+                 metrics_enabled):
+        super(_RawAmqpNotifier, self).__init__(
+            name='async auditmiddleware raw-amqp notifications')
+        self._log = log
+        self._transport_url = transport_url
+        self._topics = topics or ['notifications']
+        self._queue_capacity = mem_queue_size
+        self._queue = queue.Queue(mem_queue_size)
+        self._statsd = None
+        if metrics_enabled:
+            try:
+                import datadog
+                self._statsd = datadog.dogstatsd.DogStatsd(
+                    host=os.getenv('STATSD_HOST', 'localhost'),
+                    port=int(os.getenv('STATSD_PORT', '8125')),
+                    namespace='openstack_audit_messaging')
+            except ImportError:
+                self._log.warning("Python datadog package not installed. "
+                                  "No openstack_audit_* metrics will be "
+                                  "produced.")
+
+    def notify(self, context, payload):
+        try:
+            self._queue.put((payload, context), timeout=1)
+        except queue.Full:
+            self._log.error("Audit events could not be delivered (buffer "
+                            "full). Payload follows ...")
+            self._flush_to_log()
+            self._log_event(context, payload)
+
+    def _log_event(self, context, payload):
+        self._log.info('Event type: audit.cadf, Context: %(context)s, '
+                       'Payload: %(payload)s',
+                       {'context': context, 'event_type': 'audit.cadf',
+                        'payload': payload})
+
+    def _flush_to_log(self):
+        try:
+            while True:
+                payload, context = self._queue.get_nowait()
+                self._log_event(context, payload)
+        except queue.Empty:
+            pass
+
+    def _make_connection(self):
+        url = self._transport_url
+        if url and url.startswith('rabbit://'):
+            url = 'amqp://' + url[len('rabbit://'):]
+        return kombu.Connection(url)
+
+    def run(self):
+        while True:
+            try:
+                payload, context = self._queue.get()
+                self._publish(payload)
+                self._log.debug("Push event (raw): %s", payload.get("id"))
+            except Exception:
+                self._log.error("Cannot push raw audit event to AMQP: %s",
+                                str(sys.exc_info()[0]))
+                if 'payload' in dir():
+                    self._log_event(context, payload)
+
+    def _publish(self, payload):
+        body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        with self._make_connection() as conn:
+            conn.ensure_connection()
+            for topic in self._topics:
+                routing_key = '%s.info' % topic
+                exchange = kombu.Exchange(
+                    topic, type='topic', durable=False, auto_delete=False)
+                with kombu.Producer(conn.channel(), exchange=exchange,
+                                    routing_key=routing_key) as producer:
+                    producer.publish(
+                        body,
+                        content_type='application/json',
+                        content_encoding='utf-8',
+                    )
+
+
 def create_notifier(conf, log, metrics_enabled):
     """Create a new notifier."""
+    driver = getattr(conf.audit_middleware_notifications, 'driver', None)
+
+    if driver == 'raw_amqp':
+        if kombu is None:
+            raise ImportError(
+                "kombu is required for driver=raw_amqp but is not installed")
+        transport_url = conf.audit_middleware_notifications.transport_url
+        topics = conf.audit_middleware_notifications.topics or ['notifications']
+        mqs = conf.audit_middleware_notifications.mem_queue_size or 10000
+        notf = _RawAmqpNotifier(transport_url, topics, log, mqs,
+                                metrics_enabled)
+        notf.daemon = True
+        notf.start()
+        return notf
+
     if oslo_messaging and conf.audit_middleware_notifications.get(
         'use_oslo_messaging'):
         transport = oslo_messaging.get_notification_transport(
