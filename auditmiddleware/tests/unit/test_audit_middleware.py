@@ -169,6 +169,42 @@ class AuditMiddlewareTest(base.BaseAuditMiddlewareTest):
         payload = self.notifier.notify.call_args_list[0][0][1]
         self.assertEqual(payload['outcome'], 'unknown')
         self.assertNotIn('reason', payload)
+
+    def test_tenant_ids_in_event(self):
+        """Test that tenant_ids is injected into every published event.
+
+        tenant_ids must be present so that log-router and OpenSearch can
+        route and filter events per tenant without knowing which field
+        carries the relevant project ID.
+        """
+        path = '/v2/' + self.project_id + '/servers'
+        self.create_simple_app().get(path,
+                                     extra_environ=self.get_environ_header())
+
+        self.assertEqual(1, self.notifier.notify.call_count)
+        payload = self.notifier.notify.call_args_list[0][0][1]
+
+        self.assertIn('tenant_ids', payload)
+        self.assertIsInstance(payload['tenant_ids'], list)
+        self.assertGreater(len(payload['tenant_ids']), 0)
+        # the initiator project_id from the request headers must be present
+        self.assertIn(self.project_id, payload['tenant_ids'])
+
+    def test_tenant_ids_default_when_no_project(self):
+        """Test that tenant_ids falls back to ['Default'] with no project."""
+        path = '/v2/' + self.project_id + '/servers'
+        # omit HTTP_X_PROJECT_ID so initiator.project_id is absent
+        environ = {'HTTP_X_USER_ID': self.user_id,
+                   'HTTP_X_USER_NAME': self.username,
+                   'HTTP_X_AUTH_TOKEN': 'token',
+                   'HTTP_X_IDENTITY_STATUS': 'Confirmed'}
+        self.create_simple_app().get(path, extra_environ=environ)
+
+        self.assertEqual(1, self.notifier.notify.call_count)
+        payload = self.notifier.notify.call_args_list[0][0][1]
+
+        self.assertIn('tenant_ids', payload)
+        self.assertEqual(['Default'], payload['tenant_ids'])
         # self.assertEqual(len(payload['reporterchain']), 1)
         # self.assertEqual(payload['reporterchain'][0]['role'], 'modifier')
         # self.assertEqual(payload['reporterchain'][0]['reporter']['id'],

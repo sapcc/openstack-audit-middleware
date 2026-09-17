@@ -96,6 +96,26 @@ def _log_and_ignore_error(fn):
     return wrapper
 
 
+def _tenant_ids(event):
+    """Build the tenant_ids list for a CADF event.
+
+    Collects distinct project IDs from initiator and target so that
+    downstream consumers (log-router, OpenSearch) can route and filter
+    events per tenant without having to know which field carries the
+    relevant project ID.
+    """
+    ids = []
+    initiator_project = getattr(getattr(event, 'initiator', None),
+                                'project_id', None)
+    if initiator_project:
+        ids.append(initiator_project)
+    target_project = getattr(getattr(event, 'target', None),
+                             'project_id', None)
+    if target_project and target_project not in ids:
+        ids.append(target_project)
+    return ids if ids else ['Default']
+
+
 class ConfigError(BaseException):
     """Exception for configuration errors."""
 
@@ -146,7 +166,9 @@ class AuditMiddleware(object):
             request.environ['audit.context'] = {}
             for e in events:
                 ctx = request.environ['audit.context']
-                self._notifier.notify(ctx, e.as_dict())
+                event_dict = e.as_dict()
+                event_dict['tenant_ids'] = _tenant_ids(e)
+                self._notifier.notify(ctx, event_dict)
 
     @webob.dec.wsgify
     def __call__(self, req):
