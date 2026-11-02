@@ -220,6 +220,7 @@ For some resources, some API designs do not follow the common OpenStack naming p
  * `el_type_uri`: type-URI of the resource instances (default: `type_uri` omitting the last character); not applicable to singletons
  * `custom_id`: indicate which resource attribute contains the unique resource ID (default: `id`)
  * `custom_name`: indicate which resource attribute contains the resource readable name (default: `name`)
+ * `id_environ_key`: WSGI environ key under which the service stores a `{name: id}` dict for resources it accepted by name instead of ID; a path segment found there is reported with that ID (default: none, only ID-like segments are taken as IDs)
  * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name, but with `-` replaced by `_`)
  * `el_type_name`: JSON name of the resource instances (default: `type_name` omitting the last character)
 

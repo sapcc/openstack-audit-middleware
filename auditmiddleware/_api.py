@@ -36,7 +36,8 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
                                        'type_uri', 'el_type_uri', 'singleton',
                                        'id_field', 'name_field',
                                        'custom_actions', 'custom_attributes',
-                                       'children', 'payloads'])
+                                       'children', 'payloads',
+                                       'id_environ_key'])
 
 # default mappings from HTTP methods to CADF actions
 _method_action_map = {'GET': taxonomy.ACTION_READ,
@@ -53,6 +54,22 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
 
 # matcher for UUIDs
 _UUID_RE = re.compile("[0-9a-f-]+$")
+
+
+def _environ_id(res_spec, request, token):
+    """Look up a resource ID the service stored for a path segment.
+
+    Services that accept names in place of IDs (e.g. ironic nodes) can
+    store a {name: id} dict in the WSGI environ under the key named by
+    the resource's id_environ_key, so the event gets the real ID.
+    """
+    if not res_spec.id_environ_key or not token:
+        return None
+    idents = request.environ.get(res_spec.id_environ_key)
+    if not isinstance(idents, dict):
+        return None
+    res_id = idents.get(token)
+    return str(res_id) if res_id else None
 
 
 def _make_uuid(s):
@@ -250,7 +267,8 @@ class OpenStackAuditMiddleware(object):
                                 self._build_audit_map(
                                     spec.get('children', {}),
                                     childs_parent_type_uri),
-                                payloads_config(spec.get('payloads')))
+                                payloads_config(spec.get('payloads')),
+                                spec.get('id_environ_key'))
         return res_spec, rest_name
 
     def create_events(self, request, response=None):
@@ -325,6 +343,18 @@ class OpenStackAuditMiddleware(object):
                                       response,
                                       path, next_pos)
         elif isinstance(res_spec, ResourceSpec):
+            # the service may have resolved a name to the resource ID; this
+            # comes first, so names that look like IDs and on-demand children
+            # cached for the same name by an earlier unresolved request do
+            # not hide it
+            env_id = None
+            if not res_id and not res_spec.singleton:
+                env_id = _environ_id(res_spec, request, token)
+            if env_id:
+                return self._build_events(target_project, res_spec, env_id,
+                                          res_parent_id, request, response,
+                                          path, next_pos)
+
             # if the ID is set or it is a singleton, then the next token will
             # be an action or child
             if res_id or res_spec.singleton or token in res_spec.children:
