@@ -13,6 +13,7 @@
 """This package contains the logic for creating events from API requests."""
 
 import collections
+import copy
 import hashlib
 import json
 import os
@@ -350,7 +351,8 @@ class OpenStackAuditMiddleware(object):
                 # create resource spec on demand ...
                 res_spec.children[token] = self.register_resource(
                     res_spec.el_type_uri,
-                    token)
+                    token,
+                    res_spec.payloads)
 
                 # ... then repeat same call with res_spec now existing
                 return self._build_events(target_project, res_spec, res_id,
@@ -362,18 +364,29 @@ class OpenStackAuditMiddleware(object):
             token, request.path)
         return None
 
-    def register_resource(self, parent_type_uri, token):
+    def register_resource(self, parent_type_uri, token, parent_payloads=None):
         """Register an unknown resource to avoid missed events.
 
         The resulting events are a bit raw but contain enough
         information to understand what happened. This allows for
         incremental improvement.
+
+        An on-demand resource below a mapped one takes over a copy of the
+        parent's payloads config (enabled flag and include/exclude lists),
+        so a path the mapping does not know (e.g. a resource addressed by
+        name instead of ID) does not record payloads the mapping has
+        disabled for the parent. An inherited include list can leave an
+        empty payload for bodies without any of the included keys.
         """
+        res_dict = {}
+        if parent_payloads is not None:
+            res_dict['payloads'] = copy.deepcopy(parent_payloads)
+
         # Defensive check for None token
         if token is None:
             self._log.warning("unknown resource: None (created on demand)")
             res_name = 'unknown'
-            res_dict = {'api_name': 'unknown'}
+            res_dict['api_name'] = 'unknown'
             sub_res_spec, _ = self._build_res_spec(res_name,
                                                 parent_type_uri,
                                                 res_dict)
@@ -385,7 +398,7 @@ class OpenStackAuditMiddleware(object):
         if res_name.startswith('os-'):
             res_name = res_name[3:]
         res_name = 'X' + res_name
-        res_dict = {'api_name': token}
+        res_dict['api_name'] = token
         sub_res_spec, _ = self._build_res_spec(res_name,
                                                parent_type_uri,
                                                res_dict)
