@@ -648,26 +648,43 @@ class OpenStackAuditMiddleware(object):
 
     @staticmethod
     def _clean_payload(payload, res_spec):
-        """Clean request payload of sensitive info."""
+        """Clean request payload of sensitive info.
+
+        exclude drops the listed keys wherever they occur, also inside
+        wrapper elements and lists. include keeps only the listed keys
+        of a dict (or of each dict in a list); anything else is not
+        recorded, so an include list never lets a body through unfiltered.
+        """
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
-        res_payload = {}
-        if excl and isinstance(payload, dict):
-            # make a copy so we do not change the original request
-            res_payload = payload.copy()
-            # remove possible wrapper elements
-            for k in excl:
-                if k in res_payload:
-                    del res_payload[k]
-        elif incl and isinstance(payload, dict):
-            for k in incl:
-                v = payload.get(k)
-                if v:
-                    res_payload[k] = v
-        else:
-            res_payload = payload
+        res_payload = payload
+        if incl:
+            res_payload = OpenStackAuditMiddleware._include_keys(
+                res_payload, incl)
+        if excl:
+            res_payload = OpenStackAuditMiddleware._exclude_keys(
+                res_payload, excl)
 
         return res_payload
+
+    @staticmethod
+    def _include_keys(payload, incl):
+        if isinstance(payload, list):
+            return [OpenStackAuditMiddleware._include_keys(x, incl)
+                    for x in payload if isinstance(x, dict)]
+        if not isinstance(payload, dict):
+            return {}
+        return {k: payload[k] for k in incl if k in payload}
+
+    @staticmethod
+    def _exclude_keys(payload, excl):
+        if isinstance(payload, list):
+            return [OpenStackAuditMiddleware._exclude_keys(x, excl)
+                    for x in payload]
+        if isinstance(payload, dict):
+            return {k: OpenStackAuditMiddleware._exclude_keys(v, excl)
+                    for k, v in payload.items() if k not in excl}
+        return payload
 
     @staticmethod
     def _attach_payload(event, payload, res_spec):
