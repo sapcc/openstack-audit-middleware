@@ -349,8 +349,10 @@ class OpenStackAuditMiddleware(object):
             else:
                 # unknown resource name
                 # create resource spec on demand ...
+                # singletons have no element type, their children hang
+                # off the singleton's own type URI (see _build_res_spec)
                 res_spec.children[token] = self.register_resource(
-                    res_spec.el_type_uri,
+                    res_spec.el_type_uri or res_spec.type_uri,
                     token,
                     res_spec.payloads)
 
