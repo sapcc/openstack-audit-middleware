@@ -15,9 +15,24 @@
 import json
 import uuid
 
+from oslotest import createfile
 from pycadf import cadftaxonomy as taxonomy
 
+from auditmiddleware import _api
 from auditmiddleware.tests.unit import base
+
+
+audit_map_include = """
+service_type: 'compute/baremetal'
+prefix: '/v1'
+
+resources:
+    nodes:
+        custom_id: uuid
+        payloads:
+            include:
+              - target
+"""
 
 
 class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
@@ -578,6 +593,86 @@ class AuditApiLogicTest(base.BaseAuditMiddlewareTest):
 
         self.check_event(request, response, event, taxonomy.ACTION_UPDATE,
                          "compute/Xyetunknown/Xuchild", rid2)
+
+    def test_undeclared_child_inherits_payload_filter(self):
+        """Test that on-demand resources keep the parent's payload filter.
+
+        A server addressed by name is not recognized as an ID, so it
+        becomes an on-demand resource. Attributes excluded for servers
+        must still be left out of the payload.
+        """
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id='myserver', child_res='states')
+        request, response = self.build_api_call(
+            'PUT', url, req_json={'hidden_attr': 'secret', 'target': 'on'})
+        event = self.build_event(request, response, record_payloads=True,
+                                 metrics_enabled=False)
+
+        self.assertEqual("compute/server/Xmyserver",
+                         event['target']['typeURI'])
+        payload = [a for a in event['attachments']
+                   if a['name'] == 'payload'][0]
+        self.assertEqual({'target': 'on'}, json.loads(payload['content']))
+
+    def test_undeclared_child_inherits_disabled_payloads(self):
+        """Test that on-demand resources keep payloads disabled."""
+        rid = str(uuid.uuid4().hex)
+        url = self.build_url('servers', prefix='/v2/' + self.project_id,
+                             res_id=rid, child_res='os-volume_attachments',
+                             child_res_id='myvolume', suffix='unknownaction')
+        request, response = self.build_api_call(
+            'PUT', url, req_json={'password': 'secret'})
+        events = self.build_event_list(request, response,
+                                       record_payloads=True,
+                                       metrics_enabled=False)
+
+        self.assertEqual(1, len(events))
+        self.assertEqual("compute/server/volume-attachment/Xmyvolume",
+                         events[0]['target']['typeURI'])
+        self.assertNotIn('payload', [a['name'] for a in
+                                     events[0].get('attachments', [])])
+
+    def test_undeclared_top_level_keeps_payloads(self):
+        """Test that top-level on-demand resources still record payloads."""
+        url = self.build_url('yetunknowns', prefix='/v2/' + self.project_id,
+                             res_id='byname', child_res='uchilds')
+        request, response = self.build_api_call(
+            'PUT', url, req_json={'a': 'b'})
+        event = self.build_event(request, response, record_payloads=True,
+                                 metrics_enabled=False)
+
+        self.assertEqual("compute/Xyetunknown/Xbyname",
+                         event['target']['typeURI'])
+        payload = [a for a in event['attachments']
+                   if a['name'] == 'payload'][0]
+        self.assertEqual({'a': 'b'}, json.loads(payload['content']))
+
+    def test_undeclared_children_inherit_include_list(self):
+        """Test that an include list carries over two on-demand levels.
+
+        Mirrors ironic's /nodes/<name>/states/power: only the included
+        keys may be recorded, on the first and on a repeated request.
+        """
+        audit_map = self.useFixture(createfile.CreateFileWithContent(
+            'audit_include', audit_map_include, ext=".yaml")).path
+        url = self.build_url('nodes', prefix='/v1', res_id='node008',
+                             child_res='states', suffix='power')
+        # one middleware instance, so the second request uses the
+        # on-demand specs cached by the first one
+        middleware = _api.OpenStackAuditMiddleware(
+            audit_map, True, metrics_enabled=False)
+        for _ in range(2):
+            request, response = self.build_api_call(
+                'PUT', url, req_json={'target': 'power on',
+                                      'bmc_password': 'secret'})
+            event = middleware.create_events(request, response)[0].as_dict()
+
+            self.assertEqual("compute/baremetal/node/Xnode00/Xstates",
+                             event['target']['typeURI'])
+            payload = [a for a in event['attachments']
+                       if a['name'] == 'payload'][0]
+            self.assertEqual({'target': 'power on'},
+                             json.loads(payload['content']))
 
     def test_post_action_no_response(self):
         """Test events are created for POST actions with no response payload.

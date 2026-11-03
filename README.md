@@ -220,6 +220,7 @@ For some resources, some API designs do not follow the common OpenStack naming p
  * `el_type_uri`: type-URI of the resource instances (default: `type_uri` omitting the last character); not applicable to singletons
  * `custom_id`: indicate which resource attribute contains the unique resource ID (default: `id`)
  * `custom_name`: indicate which resource attribute contains the resource readable name (default: `name`)
+ * `id_environ_key`: WSGI environ key under which the service stores a `{name: id}` dict for resources it accepted by name instead of ID; a path segment found there is reported with that ID (default: none, only ID-like segments are taken as IDs)
  * `type_name`: JSON name for the resource, used by API designs that wrap the resource attributes into a single top-level attribute (default: `api_name` without leading `os-` prefix resp. the original resource name, but with `-` replaced by `_`)
  * `el_type_name`: JSON name of the resource instances (default: `type_name` omitting the last character)
 
@@ -248,8 +249,9 @@ The configuration option to record request payloads needs some special considera
 
 * `payloads`: controls which attributes of the request payload may not be attached to the event (e.g. because they contain very sensitive information)
    - `enabled`: set to `false` to disable payload recording for this resource entirely (default: `true`)
-   - `exclude`: exclude these payload attributes from the payload attachment (black-list approach, default: `[]`)
-   - `include`: only include these payload attributes in the payload attachment(white-list approach, default: all)
+   - `exclude`: exclude these payload attributes from the payload attachment, wherever they occur in the body, also inside wrapper elements and lists (black-list approach, default: `[]`)
+   - `include`: only include these top-level payload attributes in the payload attachment; for a list body each item is filtered, any other body is recorded as an empty object `{}` (white-list approach, default: all)
+   - when both `include` and `exclude` are set, both apply
 
 In our example this looks like this:
 
@@ -270,6 +272,8 @@ Undeclared Resources
 --------------------
 
 Resources that are not declared in the mapping file will be reported as _unknown_ in the operational logs.  Still the middleware tries to create events for them based on heuristics. They can be recognized by the `X` prefix in the resource name.
+
+An undeclared resource below a declared one uses the `payloads` settings of its parent, so payloads disabled or filtered for a resource stay that way when the URL contains something the mapping does not know (e.g. a name instead of an ID).
 
 When those X-resources show up, the mapping file should be extended with an appropriate resource definition. The reason is that the heuristics to discover and map undeclared resources are not covering all kinds of requests. There are ambiguities. 
 

@@ -13,6 +13,7 @@
 """This package contains the logic for creating events from API requests."""
 
 import collections
+import copy
 import hashlib
 import json
 import os
@@ -35,7 +36,8 @@ ResourceSpec = collections.namedtuple('ResourceSpec',
                                        'type_uri', 'el_type_uri', 'singleton',
                                        'id_field', 'name_field',
                                        'custom_actions', 'custom_attributes',
-                                       'children', 'payloads'])
+                                       'children', 'payloads',
+                                       'id_environ_key'])
 
 # default mappings from HTTP methods to CADF actions
 _method_action_map = {'GET': taxonomy.ACTION_READ,
@@ -52,6 +54,22 @@ _key_action_suffix_map = {taxonomy.ACTION_READ: '/get',
 
 # matcher for UUIDs
 _UUID_RE = re.compile("[0-9a-f-]+$")
+
+
+def _environ_id(res_spec, request, token):
+    """Look up a resource ID the service stored for a path segment.
+
+    Services that accept names in place of IDs (e.g. ironic nodes) can
+    store a {name: id} dict in the WSGI environ under the key named by
+    the resource's id_environ_key, so the event gets the real ID.
+    """
+    if not res_spec.id_environ_key or not token:
+        return None
+    idents = request.environ.get(res_spec.id_environ_key)
+    if not isinstance(idents, dict):
+        return None
+    res_id = idents.get(token)
+    return str(res_id) if res_id else None
 
 
 def _make_uuid(s):
@@ -249,7 +267,8 @@ class OpenStackAuditMiddleware(object):
                                 self._build_audit_map(
                                     spec.get('children', {}),
                                     childs_parent_type_uri),
-                                payloads_config(spec.get('payloads')))
+                                payloads_config(spec.get('payloads')),
+                                spec.get('id_environ_key'))
         return res_spec, rest_name
 
     def create_events(self, request, response=None):
@@ -324,6 +343,18 @@ class OpenStackAuditMiddleware(object):
                                       response,
                                       path, next_pos)
         elif isinstance(res_spec, ResourceSpec):
+            # the service may have resolved a name to the resource ID; this
+            # comes first, so names that look like IDs and on-demand children
+            # cached for the same name by an earlier unresolved request do
+            # not hide it
+            env_id = None
+            if not res_id and not res_spec.singleton:
+                env_id = _environ_id(res_spec, request, token)
+            if env_id:
+                return self._build_events(target_project, res_spec, env_id,
+                                          res_parent_id, request, response,
+                                          path, next_pos)
+
             # if the ID is set or it is a singleton, then the next token will
             # be an action or child
             if res_id or res_spec.singleton or token in res_spec.children:
@@ -348,9 +379,12 @@ class OpenStackAuditMiddleware(object):
             else:
                 # unknown resource name
                 # create resource spec on demand ...
+                # singletons have no element type, their children hang
+                # off the singleton's own type URI (see _build_res_spec)
                 res_spec.children[token] = self.register_resource(
-                    res_spec.el_type_uri,
-                    token)
+                    res_spec.el_type_uri or res_spec.type_uri,
+                    token,
+                    res_spec.payloads)
 
                 # ... then repeat same call with res_spec now existing
                 return self._build_events(target_project, res_spec, res_id,
@@ -362,18 +396,29 @@ class OpenStackAuditMiddleware(object):
             token, request.path)
         return None
 
-    def register_resource(self, parent_type_uri, token):
+    def register_resource(self, parent_type_uri, token, parent_payloads=None):
         """Register an unknown resource to avoid missed events.
 
         The resulting events are a bit raw but contain enough
         information to understand what happened. This allows for
         incremental improvement.
+
+        An on-demand resource below a mapped one takes over a copy of the
+        parent's payloads config (enabled flag and include/exclude lists),
+        so a path the mapping does not know (e.g. a resource addressed by
+        name instead of ID) does not record payloads the mapping has
+        disabled for the parent. An inherited include list can leave an
+        empty payload for bodies without any of the included keys.
         """
+        res_dict = {}
+        if parent_payloads is not None:
+            res_dict['payloads'] = copy.deepcopy(parent_payloads)
+
         # Defensive check for None token
         if token is None:
             self._log.warning("unknown resource: None (created on demand)")
             res_name = 'unknown'
-            res_dict = {'api_name': 'unknown'}
+            res_dict['api_name'] = 'unknown'
             sub_res_spec, _ = self._build_res_spec(res_name,
                                                 parent_type_uri,
                                                 res_dict)
@@ -385,7 +430,7 @@ class OpenStackAuditMiddleware(object):
         if res_name.startswith('os-'):
             res_name = res_name[3:]
         res_name = 'X' + res_name
-        res_dict = {'api_name': token}
+        res_dict['api_name'] = token
         sub_res_spec, _ = self._build_res_spec(res_name,
                                                parent_type_uri,
                                                res_dict)
@@ -633,26 +678,43 @@ class OpenStackAuditMiddleware(object):
 
     @staticmethod
     def _clean_payload(payload, res_spec):
-        """Clean request payload of sensitive info."""
+        """Clean request payload of sensitive info.
+
+        exclude drops the listed keys wherever they occur, also inside
+        wrapper elements and lists. include keeps only the listed keys
+        of a dict (or of each dict in a list); anything else is not
+        recorded, so an include list never lets a body through unfiltered.
+        """
         incl = res_spec.payloads.get('include')
         excl = res_spec.payloads.get('exclude')
-        res_payload = {}
-        if excl and isinstance(payload, dict):
-            # make a copy so we do not change the original request
-            res_payload = payload.copy()
-            # remove possible wrapper elements
-            for k in excl:
-                if k in res_payload:
-                    del res_payload[k]
-        elif incl and isinstance(payload, dict):
-            for k in incl:
-                v = payload.get(k)
-                if v:
-                    res_payload[k] = v
-        else:
-            res_payload = payload
+        res_payload = payload
+        if incl:
+            res_payload = OpenStackAuditMiddleware._include_keys(
+                res_payload, incl)
+        if excl:
+            res_payload = OpenStackAuditMiddleware._exclude_keys(
+                res_payload, excl)
 
         return res_payload
+
+    @staticmethod
+    def _include_keys(payload, incl):
+        if isinstance(payload, list):
+            return [OpenStackAuditMiddleware._include_keys(x, incl)
+                    for x in payload if isinstance(x, dict)]
+        if not isinstance(payload, dict):
+            return {}
+        return {k: payload[k] for k in incl if k in payload}
+
+    @staticmethod
+    def _exclude_keys(payload, excl):
+        if isinstance(payload, list):
+            return [OpenStackAuditMiddleware._exclude_keys(x, excl)
+                    for x in payload]
+        if isinstance(payload, dict):
+            return {k: OpenStackAuditMiddleware._exclude_keys(v, excl)
+                    for k, v in payload.items() if k not in excl}
+        return payload
 
     @staticmethod
     def _attach_payload(event, payload, res_spec):
